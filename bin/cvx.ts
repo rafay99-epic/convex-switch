@@ -26,6 +26,7 @@ import {
   cmdLs,
   cmdWhich,
   cmdVersion,
+  cmdDoctor,
   cmdHook,
 } from "../src/commands";
 
@@ -58,6 +59,8 @@ async function main() {
       return cmdWhich(rest);
     case "hook":
       return cmdHook(rest);
+    case "doctor":
+      return cmdDoctor();
     case "welcome":
       return welcome();
     case "version":
@@ -80,4 +83,8 @@ async function main() {
   }
 }
 
-main().catch((e) => die(String(e?.stack ?? e)));
+main().catch((e) => {
+  // Clean one-line error for users; full stack only when CVX_DEBUG is set.
+  if (process.env.CVX_DEBUG) console.error(e?.stack ?? e);
+  die(e?.message ?? String(e));
+});

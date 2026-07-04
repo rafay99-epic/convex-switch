@@ -88,6 +88,7 @@ ${bold("Everyday")}
 ${bold("Manage")}
   cvx rm <account>              forget an account (and its links)
   cvx which [path]              print the account name for a dir (scripting)
+  cvx doctor                    check your setup (node/npx, login, vault, hook)
   cvx welcome                   show the welcome screen again
   cvx version                   print the version
 

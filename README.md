@@ -141,6 +141,7 @@ bun run dev             # runs as work — both live simultaneously
 | `cvx accounts` | List stored accounts |
 | `cvx ls` | List linked projects |
 | `cvx which [path]` | Print the account name for a dir (scripting) |
+| `cvx doctor` | Check your setup (node/npx, login, vault, hook) |
 | `cvx rm <account>` | Forget an account and its links |
 | `cvx hook [--install]` | Print (or install) the zsh cd-hook |
 
@@ -152,10 +153,13 @@ a single binary, so the split costs nothing at build time.
 ```
 bin/cvx.ts        entry point + command dispatch
 src/store.ts      data layer: vault I/O, the config swap, token verify, paths
-src/ui.ts         colors, the logo banner, first-run welcome, help
+src/ui.ts         the logo banner, first-run welcome, help
+src/colors.ts     the palette (edit here to re-theme)
 src/commands.ts   one function per subcommand
+src/hooks.ts      zsh / bash / PowerShell shell-hook snippets
+src/system.ts     external-tool checks (node/npx)
 src/args.ts       flag parsing
-man/cvx.1         man page (installed by Homebrew → `man cvx`)
+man/cvx.1         man page (installed by Homebrew/npm → `man cvx`)
 ```
 
 First run of a bare `cvx` shows a welcome screen; `cvx welcome` shows it again,

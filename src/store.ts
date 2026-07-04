@@ -46,11 +46,30 @@ export function ensureVault() {
   if (!existsSync(LINKS_FILE)) writeJSON(LINKS_FILE, {});
 }
 
+/** Lenient read (used for Convex's own config): any problem → fallback. */
 export function readJSON<T>(file: string, fallback: T): T {
   try {
     return JSON.parse(readFileSync(file, "utf8")) as T;
   } catch {
     return fallback;
+  }
+}
+
+/**
+ * Strict read for our own vault files: a missing/empty file is fine (fallback),
+ * but a present-yet-unparseable file THROWS rather than silently resetting —
+ * otherwise the next write would clobber a recoverable file and lose accounts.
+ */
+export function readVaultJSON<T>(file: string, fallback: T): T {
+  if (!existsSync(file)) return fallback;
+  const raw = readFileSync(file, "utf8");
+  if (raw.trim() === "") return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    throw new Error(
+      `${file} is corrupted (invalid JSON). Fix or delete it, then re-run.`,
+    );
   }
 }
 
@@ -61,9 +80,9 @@ export function writeJSON(file: string, data: unknown) {
   } catch {}
 }
 
-export const readAccounts = () => readJSON<Accounts>(ACCOUNTS_FILE, {});
+export const readAccounts = () => readVaultJSON<Accounts>(ACCOUNTS_FILE, {});
 export const writeAccounts = (a: Accounts) => writeJSON(ACCOUNTS_FILE, a);
-export const readLinks = () => readJSON<Links>(LINKS_FILE, {});
+export const readLinks = () => readVaultJSON<Links>(LINKS_FILE, {});
 export const writeLinks = (l: Links) => writeJSON(LINKS_FILE, l);
 
 // --- Convex global config (the single account switch) -----------------------
@@ -93,14 +112,28 @@ export async function verifyToken(token: string): Promise<Team[]> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 12000);
   try {
-    const res = await fetch(API_TEAMS, {
-      headers: { Authorization: `Bearer ${token}`, "Convex-Client": CLIENT },
-      signal: ctrl.signal,
-    });
+    let res: Response;
+    try {
+      res = await fetch(API_TEAMS, {
+        headers: { Authorization: `Bearer ${token}`, "Convex-Client": CLIENT },
+        signal: ctrl.signal,
+      });
+    } catch (e) {
+      // Network-level failure (offline, DNS, timeout) — not an auth problem.
+      if ((e as Error).name === "AbortError")
+        throw new Error("timed out reaching Convex (check your connection)");
+      throw new Error("couldn't reach Convex — are you online?");
+    }
     if (res.status === 401 || res.status === 403)
       throw new Error("token rejected by Convex (expired or invalid)");
     if (!res.ok) throw new Error(`Convex API returned ${res.status}`);
-    const teams = (await res.json()) as Team[];
+    let teams: Team[];
+    try {
+      teams = (await res.json()) as Team[];
+    } catch {
+      throw new Error("Convex returned an unexpected (non-JSON) response");
+    }
+    if (!Array.isArray(teams)) throw new Error("Convex returned an unexpected response shape");
     return teams.map((t) => ({ slug: t.slug, name: t.name }));
   } finally {
     clearTimeout(t);
