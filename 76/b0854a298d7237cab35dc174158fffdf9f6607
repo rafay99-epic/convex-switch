@@ -1,0 +1,24 @@
+.github/scripts/bump-formula.sh
+  s_326bad0e8bda7f::t_d92cc4243ab963 102-105
+README.md
+  s_326bad0e8bda7f::t_d3ba187c839eaa 52-61,63-65
+  s_326bad0e8bda7f::t_2c649906439cc1 126-141
+.gitignore
+  s_326bad0e8bda7f::t_c3d2d358240269 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "76b0854a298d7237cab35dc174158fffdf9f6607",
+  "prompts": {},
+  "sessions": {
+    "s_326bad0e8bda7f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c31b8df-1252-41be-801e-81f849ff95bd",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
