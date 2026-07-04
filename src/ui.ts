@@ -72,25 +72,31 @@ ${bold("Setup")} ${dim("(one-time per account)")}
   npx convex login              log into an account in your browser
   cvx add [name]                store the current login as <name> (verified)
   cvx login <name>              do both: login, then store as <name>
+  cvx refresh <account>         re-authenticate an account (refresh its token)
 
 ${bold("Wire projects to accounts")}
   cvx link <account> [path]     link a project dir (default: cwd) to an account
   cvx unlink [path]             remove a link
-  cvx hook --install            add the auto-switch hook to your shell (zsh/bash/pwsh)
+  cvx hook --install            add the auto-switch hook (zsh/bash/fish/nu/pwsh)
+  cvx completions <shell>       print a shell completion script
 
 ${bold("Everyday")}
   cd <project> && bun run dev   the linked account is activated automatically
-  cvx status                    show active account + this dir's link
+  cvx use                       activate — or pick an account if unlinked
+  cvx run <account> -- <cmd>    run one command as <account> (no global change)
+  cvx open                      open the Convex dashboard for this project
+  cvx status [--json]           show active account + this dir's link
   cvx accounts                  list stored accounts
   cvx ls                        list linked projects
-  cvx activate [-q]             activate this dir's account (the hook calls this)
 
 ${bold("Manage")}
+  cvx rename <old> <new>        rename an account, keep its links
   cvx rm <account>              forget an account (and its links)
   cvx which [path]              print the account name for a dir (scripting)
-  cvx doctor                    check your setup (node/npx, login, vault, hook)
-  cvx welcome                   show the welcome screen again
-  cvx version                   print the version
+  cvx prompt                    print the active account (for a shell prompt)
+  cvx keychain <status|…>       store tokens in the OS keychain
+  cvx doctor                    check setup + token health
+  cvx welcome · version         the welcome screen · the version
 
 Vault: ${cyan(shortVault())}  ${dim("(chmod 600, never in your projects)")}
 `);

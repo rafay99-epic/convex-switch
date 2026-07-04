@@ -134,16 +134,62 @@ bun run dev             # runs as work — both live simultaneously
 | --- | --- |
 | `cvx add [name]` | Store the current `~/.convex` login as an account |
 | `cvx login <name>` | `npx convex login`, then store it as `<name>` |
+| `cvx refresh <account>` | Re-authenticate an account (refresh its token) |
 | `cvx link <account> [path]` | Link a project dir (default cwd) to an account |
 | `cvx unlink [path]` | Remove a link |
+| `cvx rename <old> <new>` | Rename an account, keeping its links |
+| `cvx rm <account>` | Forget an account and its links |
+| `cvx use` | Activate this dir's account — or pick one interactively if unlinked |
+| `cvx run <account> -- <cmd>` | Run one command as `<account>` without changing the global login |
+| `cvx open` | Open the Convex dashboard for this project's deployment |
 | `cvx activate [-q]` | Activate this dir's account (the hook calls this) |
-| `cvx status` | Show the active account and this dir's link |
+| `cvx status [--json]` | Show the active account and this dir's link |
 | `cvx accounts` | List stored accounts |
 | `cvx ls` | List linked projects |
 | `cvx which [path]` | Print the account name for a dir (scripting) |
-| `cvx doctor` | Check your setup (node/npx, login, vault, hook) |
-| `cvx rm <account>` | Forget an account and its links |
-| `cvx hook [--install]` | Print (or install) the zsh cd-hook |
+| `cvx prompt` | Print the active account name (for a shell prompt segment) |
+| `cvx keychain <status\|enable\|disable>` | Store tokens in the OS keychain instead of a file |
+| `cvx doctor` | Check setup + per-account token health |
+| `cvx completions <shell>` | Print a completion script (zsh/bash/fish/powershell) |
+| `cvx hook [--install] [--shell …]` | Install the cd-hook (zsh/bash/fish/nu/powershell) |
+
+### Run a command as another account, without switching
+
+```sh
+cvx run work -- npx convex logs        # from anywhere, as the "work" account
+cvx run . -- npx convex deploy         # "." = this directory's linked account
+```
+
+`cvx run` sets `CONVEX_OVERRIDE_ACCESS_TOKEN` for that one process only — it never
+touches your global login, so it's safe in scripts and alongside running dev servers.
+
+### Store tokens in the OS keychain (optional)
+
+By default tokens live in `~/.convex-switch/` (chmod 600). To move them into the
+**macOS Keychain**, **libsecret** (Linux), or **DPAPI** (Windows):
+
+```sh
+cvx keychain enable      # migrates every account into the OS keychain
+cvx keychain disable     # moves them back to the file vault
+```
+
+### Shell prompt + completions
+
+```sh
+cvx completions zsh >> ~/.zshrc         # tab-complete commands + account names
+# starship: show the active account in your prompt
+# [custom.cvx]  command = "cvx prompt"  when = "true"  format = "[($output )]($style)"
+```
+
+## Upgrading from an older version
+
+The vault is schema-versioned. The first time you run an interactive `cvx`
+command after updating from an older release, cvx shows a one-time prompt and,
+on confirmation, re-secures your tokens in the best available backend (OS
+keychain if present, otherwise the chmod-600 file vault) and upgrades the vault
+format. It's mandatory and runs once — you never see it again. The cd-hook and
+scripts keep working throughout; the prompt only appears in an interactive
+terminal.
 
 ## Project layout
 
