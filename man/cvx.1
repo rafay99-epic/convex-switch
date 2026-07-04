@@ -1,0 +1,105 @@
+.TH CVX 1 "2026" "convex-switch" "User Commands"
+.SH NAME
+cvx \- switch Convex accounts per project, automatically
+.SH SYNOPSIS
+.B cvx
+.I command
+.RI [ args ]
+.SH DESCRIPTION
+.B convex-switch
+(\fBcvx\fR) lets you run several Convex accounts across many projects at once
+without logging in and out. The Convex CLI reads your identity from a single
+global file, \fI~/.convex/config.json\fR; \fBcvx\fR keeps a private vault of
+your account tokens and a map of project \(-> account, then rewrites that one
+file to the linked account whenever you \fBcd\fR into a project (via a zsh
+\fBchpwd\fR hook). No deploy keys, and no tokens are stored inside your
+repositories.
+.PP
+Because a running \fBconvex dev\fR caches its deployment credentials at startup,
+swapping the global file afterwards does not disturb sessions already running \(em
+so several accounts can run side by side in separate terminals.
+.SH COMMANDS
+.SS Setup
+.TP
+.B cvx add \fR[\fIname\fR] [\fB--token\fR \fIvalue\fR] [\fB--force\fR]
+Store the login currently in \fI~/.convex/config.json\fR as an account. The token
+is verified against Convex; if \fIname\fR is omitted the team slug is used.
+.TP
+.B cvx login \fIname\fR
+Force a fresh browser sign-in (\fBconvex login --force\fR), then store it as
+\fIname\fR. Use this to add a second or third account.
+.SS Wire projects to accounts
+.TP
+.B cvx link \fIaccount\fR \fR[\fIpath\fR]
+Link a project directory (default: the current directory) to an account. One
+account may be linked to many projects.
+.TP
+.B cvx unlink \fR[\fIpath\fR]
+Remove a link.
+.TP
+.B cvx hook \fR[\fB--install\fR]
+Print the zsh cd-hook, or with \fB--install\fR append it to \fI~/.zshrc\fR.
+.SS Everyday
+.TP
+.B cvx activate \fR[\fB-q\fR] [\fIpath\fR]
+Activate the account linked to a directory by rewriting the global config. The
+shell hook calls this on every \fBcd\fR; \fB-q\fR silences the "nothing to do"
+cases.
+.TP
+.B cvx status
+Show the active account and the current directory's link.
+.TP
+.B cvx accounts
+List stored accounts; the active one is marked.
+.TP
+.B cvx ls
+List linked projects; the current directory is marked.
+.TP
+.B cvx which \fR[\fIpath\fR]
+Print the account name for a directory (exit 1 if none). For scripting.
+.SS Manage
+.TP
+.B cvx rm \fIaccount\fR
+Forget an account and any links pointing at it.
+.TP
+.B cvx welcome
+Show the welcome screen again.
+.TP
+.B cvx version
+Print the version.
+.TP
+.B cvx help
+Show the full command reference.
+.SH FILES
+.TP
+.I ~/.convex-switch/accounts.json
+Stored account tokens (chmod 600).
+.TP
+.I ~/.convex-switch/links.json
+Project \(-> account map (chmod 600).
+.TP
+.I ~/.convex/config.json
+The Convex CLI's global login, which \fBcvx\fR rewrites.
+.SH ENVIRONMENT
+.TP
+.B NO_COLOR
+Disable colored output.
+.SH EXAMPLES
+.PP
+Add two accounts and wire up projects:
+.PP
+.RS
+.nf
+cvx login personal
+cvx login work
+cd ~/Code/app-a && cvx link personal
+cd ~/Code/app-b && cvx link work
+cvx hook --install && exec zsh
+.fi
+.RE
+.SH SEE ALSO
+.BR convex (1)
+.PP
+Project home: https://github.com/rafay99-epic/convex-switch
+.SH AUTHOR
+Abdul Rafay

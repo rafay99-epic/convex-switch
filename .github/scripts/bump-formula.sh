@@ -65,6 +65,7 @@ class Cvx < Formula
 
   def install
     bin.install "cvx"
+    man1.install "cvx.1"
   end
 
   def caveats

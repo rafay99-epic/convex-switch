@@ -10,9 +10,12 @@ on:
     branches: [main]
     paths:
       - "bin/**"
+      - "src/**"
+      - "man/**"
       - "package.json"
       - ".github/workflows/release.yml"
       - ".github/scripts/bump-formula.sh"
+      - ".github/scripts/publish-npm.sh"
   workflow_dispatch:
 
 permissions:
@@ -41,11 +44,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
+          cp man/cvx.1 dist/cvx.1   # shipped in every tarball for `man cvx`
           build() { # <bun-target> <os> <arch>
             echo "→ building $2-$3"
             bun build ./bin/cvx.ts --compile --minify --target="bun-$1" --outfile dist/cvx
             chmod +x dist/cvx
-            tar -C dist -czf "dist/cvx-$2-$3.tar.gz" cvx
+            tar -C dist -czf "dist/cvx-$2-$3.tar.gz" cvx cvx.1
             rm dist/cvx
           }
           build darwin-arm64 darwin arm64
@@ -75,3 +79,15 @@ jobs:
             exit 0
           fi
           bash .github/scripts/bump-formula.sh
+
+      # Runs last: GitHub release + Homebrew have already shipped, so an npm
+      # scope/token problem can't block them.
+      - name: Publish to npm
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "${NPM_TOKEN:-}" ]; then
+            echo "::warning::NPM_TOKEN not set — skipping npm publish. Add an npm automation token as the NPM_TOKEN secret to publish @rafay99/cvx + its 4 platform packages."
+            exit 0
+          fi
+          bash .github/scripts/publish-npm.sh

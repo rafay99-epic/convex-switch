@@ -1,4 +1,4 @@
-# convex-switch (`cvx`)
+# Convex Switch (`cvx`)
 
 Run multiple Convex accounts across multiple projects at once — without
 logging in and out, without deploy keys, and without putting any secrets in
@@ -56,6 +56,21 @@ brew install rafay99-epic/apps/cvx
 cvx hook --install   # adds the cd-hook to ~/.zshrc (once)
 exec zsh             # reload your shell
 ```
+
+**npm / bun / pnpm** — installs the same prebuilt binary:
+
+```bash
+npm install -g @rafay99/cvx      # or: bun add -g @rafay99/cvx
+pnpm add -g @rafay99/cvx
+cvx hook --install
+exec zsh
+```
+
+> Distributed the esbuild way: per-platform packages
+> (`@rafay99/cvx-<os>-<arch>`) carry the binary, gated by `os`/`cpu`, and a
+> tiny launcher in the main package (`@rafay99/cvx`) execs it. No postinstall —
+> so it works under `bun add -g` and `--ignore-scripts` too. The command you
+> type is still `cvx`.
 
 **From source** (Bun):
 
@@ -122,6 +137,23 @@ bun run dev             # runs as work — both live simultaneously
 | `cvx which [path]` | Print the account name for a dir (scripting) |
 | `cvx rm <account>` | Forget an account and its links |
 | `cvx hook [--install]` | Print (or install) the zsh cd-hook |
+
+## Project layout
+
+The CLI is split into small modules; `bun build --compile` bundles them all into
+a single binary, so the split costs nothing at build time.
+
+```
+bin/cvx.ts        entry point + command dispatch
+src/store.ts      data layer: vault I/O, the config swap, token verify, paths
+src/ui.ts         colors, the logo banner, first-run welcome, help
+src/commands.ts   one function per subcommand
+src/args.ts       flag parsing
+man/cvx.1         man page (installed by Homebrew → `man cvx`)
+```
+
+First run of a bare `cvx` shows a welcome screen; `cvx welcome` shows it again,
+and `man cvx` opens the manual.
 
 ## Releasing
 
