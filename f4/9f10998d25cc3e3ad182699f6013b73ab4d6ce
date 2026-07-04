@@ -1,0 +1,41 @@
+bin/cvx.ts
+  s_326bad0e8bda7f::t_039adb11bcc250 8,16,19,22-24,29,32-33,45-46,51-53,59-64,66,68,74-80,84
+src/store.ts
+  s_326bad0e8bda7f::t_c324bbfed839a0 110-155
+  s_326bad0e8bda7f::t_4faf8ae015c4bf 240-279
+  s_326bad0e8bda7f::t_f2cd63b0f52495 35-36,45-56,59
+  s_326bad0e8bda7f::t_304ff317d6154d 17-23
+src/ui.ts
+  s_326bad0e8bda7f::t_1a0171b3f7fd97 75,80-81,85-88,93,96-99
+README.md
+  s_326bad0e8bda7f::t_108dd69bcab869 137,140-144,146,150-182
+src/hooks.ts
+  s_326bad0e8bda7f::t_6ee626a8a8749f 57-80,82-88,95-96
+  s_326bad0e8bda7f::t_afc418cb1dec95 8
+src/completions.ts
+  s_326bad0e8bda7f::t_3d5eb52131ebb2 1-96
+man/cvx.1
+  s_326bad0e8bda7f::t_7dfa34c7d87397 31-33,43-46,48-52,55-68,74-76,86-89,95-104
+src/keychain.ts
+  s_326bad0e8bda7f::t_a9eae82358243b 1-141
+src/commands.ts
+  s_326bad0e8bda7f::t_32b898eac27919 4,6,8-11,16-17,22-23,30-39,41,44-65,69,97-104,106-109,114,125,132-151,157,168,181-218,220,223-224,227-228,242-243,245-248,265-266,269,271-283,290-348,350-371,373-375,388-389,391-397,399,401-404,430-559,564-566,575,580,583,587,591-592,594,597-598,600-603,606,609-635,641-652,655-657,661,666-672,678,681,685,691
+src/system.ts
+  s_326bad0e8bda7f::t_bf6b9dd309daa3 25-39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f49f10998d25cc3e3ad182699f6013b73ab4d6ce",
+  "prompts": {},
+  "sessions": {
+    "s_326bad0e8bda7f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c31b8df-1252-41be-801e-81f849ff95bd",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
