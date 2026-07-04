@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="cvx (Convex Switch) — run every Convex account at once. Bind each project to an account and switch automatically when you cd in. No deploy keys, no tokens in your repos.">
+<meta name="color-scheme" content="light dark">
+<title>Convex Switch — one terminal, every Convex account</title>
+<style>
+  :root {
+    --paper: #f4f6f7;
+    --raise: #ffffff;
+    --ink: #15191c;
+    --muted: #5a6570;
+    --faint: #8b95a0;
+    --line: #e2e6e9;
+    --line-strong: #d3d9dd;
+    --accent: #0c8577;
+    --accent-ink: #096b60;
+    --ok: #1f8a4c;
+    --grid: rgba(12,133,119,.05);
+    --term-bg: #10151a;
+    --term-ink: #cfd8dd;
+    --term-muted: #6d7c86;
+    --term-accent: #3fd8c3;
+    --term-ok: #6cc57f;
+    --shadow: 0 1px 2px rgba(20,30,40,.05), 0 12px 40px rgba(20,30,40,.08);
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0c0f11; --raise: #12171a; --ink: #e7eced; --muted: #97a2ab; --faint: #6a757e;
+      --line: #1f262b; --line-strong: #2a3238; --accent: #37d3be; --accent-ink: #5fe0cf; --ok: #4cc66a;
+      --grid: rgba(55,211,190,.06); --term-bg: #0a0e11;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 16px 50px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="light"] {
+    --paper: #f4f6f7; --raise: #ffffff; --ink: #15191c; --muted: #5a6570; --faint: #8b95a0;
+    --line: #e2e6e9; --line-strong: #d3d9dd; --accent: #0c8577; --accent-ink: #096b60; --ok: #1f8a4c;
+    --grid: rgba(12,133,119,.05); --term-bg: #10151a;
+    --shadow: 0 1px 2px rgba(20,30,40,.05), 0 12px 40px rgba(20,30,40,.08);
+  }
+  :root[data-theme="dark"] {
+    --paper: #0c0f11; --raise: #12171a; --ink: #e7eced; --muted: #97a2ab; --faint: #6a757e;
+    --line: #1f262b; --line-strong: #2a3238; --accent: #37d3be; --accent-ink: #5fe0cf; --ok: #4cc66a;
+    --grid: rgba(55,211,190,.06); --term-bg: #0a0e11;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 16px 50px rgba(0,0,0,.5);
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; overflow-x: hidden; scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: var(--sans); line-height: 1.6; font-size: 16px;
+    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+  }
+  /* Ambient terminal grid, faded out below the hero. Purely decorative. */
+  body::before {
+    content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background-image:
+      linear-gradient(to right, var(--grid) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
+    background-size: 34px 34px;
+    -webkit-mask-image: radial-gradient(120% 55% at 50% -5%, #000 25%, transparent 72%);
+    mask-image: radial-gradient(120% 55% at 50% -5%, #000 25%, transparent 72%);
+  }
+  body > * { position: relative; z-index: 1; }
+
+  .wrap { width: 100%; max-width: 880px; margin: 0 auto; padding: 0 24px; }
+  a { color: var(--accent-ink); text-decoration: none; }
+  a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+  ::selection { background: color-mix(in srgb, var(--accent) 26%, transparent); }
+
+  .mono { font-family: var(--mono); }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 10px;
+    font-family: var(--mono); font-size: 12px; letter-spacing: .18em;
+    text-transform: uppercase; color: var(--accent-ink); font-weight: 600;
+  }
+  .eyebrow::before { content: ""; width: 16px; height: 1px; background: currentColor; opacity: .8; }
+
+  /* ---- nav ---- */
+  nav {
+    position: sticky; top: 0; z-index: 20;
+    background: color-mix(in srgb, var(--paper) 86%, transparent);
+    backdrop-filter: blur(9px); -webkit-backdrop-filter: blur(9px);
+    border-bottom: 1px solid var(--line);
+  }
+  .nav-in { display: flex; align-items: center; justify-content: space-between; height: 58px; gap: 12px; }
+  .brand { display: flex; align-items: baseline; gap: 9px; font-family: var(--mono); }
+  .brand b { font-weight: 700; font-size: 17px; letter-spacing: -.01em; }
+  .brand .v { font-size: 11px; color: var(--muted); border: 1px solid var(--line-strong); border-radius: 999px; padding: 1px 7px; }
+  .nav-links { display: flex; align-items: center; gap: 22px; font-family: var(--mono); font-size: 13.5px; }
+  .nav-links a { color: var(--muted); position: relative; }
+  .nav-links a::after {
+    content: ""; position: absolute; left: 0; right: 100%; bottom: -5px; height: 1.5px;
+    background: var(--accent); transition: right .22s ease;
+  }
+  .nav-links a:hover { color: var(--ink); text-decoration: none; }
+  .nav-links a:hover::after { right: 0; }
+  #theme { background: none; border: 0; cursor: pointer; color: var(--muted); font: inherit; font-size: 15px; padding: 4px; line-height: 1; }
+  #theme:hover { color: var(--accent-ink); }
+
+  /* ---- hero ---- */
+  header { padding: 74px 0 8px; }
+  h1 {
+    font-family: var(--mono); font-weight: 600;
+    font-size: clamp(30px, 6vw, 52px); line-height: 1.07; letter-spacing: -.02em;
+    margin: 18px 0 0; text-wrap: balance; max-width: 15ch;
+  }
+  h1 .sw { color: var(--accent); }
+  h1 .cur {
+    display: inline-block; width: .58ch; height: .95em; background: var(--accent);
+    margin-left: .12ch; transform: translateY(.06em);
+  }
+  .lede { font-size: clamp(16px, 2.4vw, 19px); color: var(--muted); max-width: 56ch; margin: 22px 0 0; line-height: 1.55; }
+  .lede b { color: var(--ink); font-weight: 600; }
+
+  .cta { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 18px; margin-top: 32px; }
+  .copybox {
+    display: inline-flex; align-items: center; gap: 12px; max-width: 100%;
+    background: var(--raise); border: 1px solid var(--line-strong); border-radius: 8px;
+    padding: 11px 12px 11px 16px; font-family: var(--mono); font-size: 14px;
+    box-shadow: var(--shadow); transition: border-color .18s, transform .18s;
+  }
+  .copybox:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--line-strong)); }
+  .copybox .prompt { color: var(--faint); flex: none; }
+  .copybox code { color: var(--ink); white-space: nowrap; overflow-x: auto; min-width: 0; scrollbar-width: none; }
+  .copybox code::-webkit-scrollbar { display: none; }
+  .copybtn {
+    flex: none; font-family: var(--mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase;
+    border: 1px solid var(--line-strong); background: transparent; color: var(--muted);
+    border-radius: 5px; padding: 5px 9px; cursor: pointer; transition: color .15s, border-color .15s;
+  }
+  .copybtn:hover { color: var(--ink); border-color: var(--muted); }
+  .copybtn.done { color: var(--ok); border-color: var(--ok); }
+  .ghost { font-family: var(--mono); font-size: 14px; color: var(--muted); display: inline-flex; align-items: center; gap: 7px; }
+  .ghost:hover { color: var(--ink); text-decoration: none; }
+  .ghost .arw { color: var(--accent); transition: transform .18s; }
+  .ghost:hover .arw { transform: translateX(3px); }
+
+  /* ---- terminal ---- */
+  .term-wrap { margin-block: 46px 0; }   /* no bottom clamp — next section owns the gap */
+  .terminal { background: var(--term-bg); border: 1px solid var(--line-strong); border-radius: 11px; box-shadow: var(--shadow); overflow: hidden; }
+  .term-bar { display: flex; align-items: center; gap: 13px; padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,.06); }
+  .dots { display: flex; gap: 7px; }
+  .dots i { width: 11px; height: 11px; border-radius: 50%; background: #2c353c; display: block; }
+  .term-title { font-family: var(--mono); font-size: 12px; color: var(--term-muted); }
+  .term-run { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 11px; color: var(--term-muted); }
+  .term-run i { width: 7px; height: 7px; border-radius: 50%; background: var(--term-ok); box-shadow: 0 0 0 0 color-mix(in srgb, var(--term-ok) 70%, transparent); }
+  .term-body { padding: 20px 20px 24px; font-family: var(--mono); font-size: 13.5px; line-height: 1.85; color: var(--term-ink); overflow-x: auto; }
+  .term-body .row { white-space: pre; }
+  .term-body .p { color: var(--term-muted); }
+  .term-body .cmd { color: var(--term-ink); }
+  .term-body .sw { color: var(--term-accent); }
+  .term-body .ok { color: var(--term-ok); }
+  .term-body .dim { color: var(--term-muted); }
+  .term-body .cur { display: inline-block; width: 8px; height: 1.05em; vertical-align: text-bottom; background: var(--term-accent); margin-left: 2px; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal .row { opacity: 0; transform: translateY(4px); animation: rise .42s cubic-bezier(.2,.7,.3,1) forwards; }
+    .cur { animation: blink 1.05s steps(1) infinite; }
+    .term-run i { animation: pulse 2s ease-out infinite; }
+    @keyframes rise { to { opacity: 1; transform: none; } }
+    @keyframes blink { 50% { opacity: 0; } }
+    @keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--term-ok) 60%, transparent); } 70% { box-shadow: 0 0 0 6px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+  }
+
+  /* ---- sections ---- */
+  section { padding: 62px 0; border-top: 1px solid var(--line); }
+  .term-wrap + section { border-top: 0; padding-top: 64px; }  /* kill the hard line right under the terminal */
+  .sec-head { max-width: 62ch; }
+  h2 { font-family: var(--mono); font-weight: 600; font-size: clamp(21px, 3.4vw, 27px); letter-spacing: -.01em; margin: 12px 0 0; text-wrap: balance; }
+  .sec-head p { color: var(--muted); font-size: 16.5px; max-width: 60ch; margin: 14px 0 0; }
+  .sec-head p b { color: var(--ink); font-weight: 600; }
+
+  /* ---- steps ---- */
+  .steps { display: grid; gap: 1px; margin-top: 34px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--line); }
+  .step { display: grid; grid-template-columns: 42px 1fr; gap: 20px; align-items: start; padding: 22px; background: var(--raise); transition: background .16s; }
+  .step:hover { background: color-mix(in srgb, var(--accent) 4%, var(--raise)); }
+  .step .n { font-family: var(--mono); font-size: 13px; color: var(--accent-ink); font-weight: 600; padding-top: 3px; font-variant-numeric: tabular-nums; }
+  .step h3 { margin: 0; font-family: var(--sans); font-size: 16px; font-weight: 600; }
+  .step p { margin: 5px 0 12px; color: var(--muted); font-size: 14.5px; }
+  .step .line { font-family: var(--mono); font-size: 13.5px; color: var(--ink); overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+  .step .line::-webkit-scrollbar { display: none; }
+  .step .line .p { color: var(--faint); }
+
+  /* ---- install ---- */
+  .installs { display: grid; gap: 12px; margin-top: 30px; }
+  .inst { display: grid; grid-template-columns: 96px 1fr auto; align-items: center; gap: 16px;
+    border: 1px solid var(--line); border-radius: 9px; padding: 13px 14px 13px 18px; background: var(--raise);
+    transition: border-color .18s, transform .18s; }
+  .inst:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); transform: translateY(-1px); }
+  .inst .who { font-family: var(--mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .inst code { font-family: var(--mono); font-size: 14px; color: var(--ink); overflow-x: auto; min-width: 0; white-space: nowrap; scrollbar-width: none; }
+  .inst code::-webkit-scrollbar { display: none; }
+
+  /* ---- features ---- */
+  .feat { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin-top: 34px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .f { background: var(--raise); padding: 22px 24px; transition: background .16s; }
+  .f:hover { background: color-mix(in srgb, var(--accent) 4%, var(--raise)); }
+  .f .t { font-family: var(--mono); font-size: 14px; font-weight: 600; color: var(--ink); display: flex; align-items: center; gap: 9px; }
+  .f .t .g { color: var(--accent); font-size: 15px; }
+  .f p { margin: 8px 0 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
+
+  /* ---- footer ---- */
+  footer { border-top: 1px solid var(--line); padding: 40px 0 64px; }
+  .foot { display: flex; flex-wrap: wrap; gap: 12px 26px; align-items: center; justify-content: space-between; }
+  .foot .l { display: flex; flex-wrap: wrap; gap: 20px; font-family: var(--mono); font-size: 13px; }
+  .foot .l a { color: var(--muted); }
+  .foot .l a:hover { color: var(--ink); text-decoration: none; }
+  .foot .r { font-family: var(--mono); font-size: 12.5px; color: var(--faint); }
+
+  /* ---- mobile ---- */
+  @media (max-width: 680px) {
+    .feat { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 620px) {
+    .inst { grid-template-columns: 1fr auto; padding: 13px 14px; }
+    .inst .who { grid-column: 1 / -1; margin-bottom: -4px; }
+  }
+  @media (max-width: 560px) {
+    .wrap { padding: 0 18px; }
+    header { padding: 48px 0 4px; }
+    h1 { font-size: clamp(27px, 9vw, 40px); }
+    .lede { font-size: 16px; margin-top: 18px; }
+    section { padding: 46px 0; }
+    .term-wrap + section { padding-top: 46px; }
+    .term-wrap { margin-block: 34px 0; }
+    .term-body { font-size: 12px; padding: 16px 16px 20px; line-height: 1.8; }
+    .term-title { font-size: 11px; }
+    .nav-links { gap: 15px; font-size: 12.5px; }
+    .nav-links a::after { display: none; }
+    .brand b { font-size: 15.5px; }
+    .cta { gap: 12px; }
+    .copybox { width: 100%; padding: 11px 11px 11px 14px; }
+    .ghost { font-size: 13.5px; }
+    .step { grid-template-columns: 28px 1fr; gap: 12px; padding: 18px 16px; }
+    .steps, .feat { border-radius: 9px; }
+    .f { padding: 20px; }
+    .foot { gap: 14px; }
+  }
+  @media (max-width: 380px) {
+    h1 { font-size: 25px; }
+    .brand .v { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap nav-in">
+    <div class="brand"><b>cvx</b><span class="v mono">v0.20</span></div>
+    <div class="nav-links">
+      <a href="https://github.com/rafay99-epic/convex-switch">GitHub</a>
+      <a href="https://www.npmjs.com/package/@rafay99/cvx">npm</a>
+      <button id="theme" title="Toggle theme" aria-label="Toggle color theme">◐</button>
+    </div>
+  </div>
+</nav>
+
+<header>
+  <div class="wrap">
+    <span class="eyebrow">Convex Switch</span>
+    <h1>One terminal.<br>Every Convex <span class="sw">account</span>.<span class="cur" aria-hidden="true"></span></h1>
+    <p class="lede">The Convex CLI remembers a single login. <b>cvx</b> binds each project to its own
+      account and switches for you the moment you <b>cd</b> in — no logout/login churn,
+      no deploy keys, no tokens in your repos.</p>
+
+    <div class="cta">
+      <div class="copybox" data-copy="brew install rafay99-epic/apps/cvx">
+        <span class="prompt">$</span>
+        <code>brew install rafay99-epic/apps/cvx</code>
+        <button class="copybtn" aria-label="Copy install command">copy</button>
+      </div>
+      <a class="ghost" href="https://github.com/rafay99-epic/convex-switch">Read the source <span class="arw">→</span></a>
+    </div>
+  </div>
+</header>
+
+<div class="wrap term-wrap">
+  <div class="terminal">
+    <div class="term-bar">
+      <span class="dots"><i></i><i></i><i></i></span>
+      <span class="term-title">zsh — ~/code</span>
+      <span class="term-run"><i></i> live</span>
+    </div>
+    <div class="term-body reveal" id="term">
+      <div class="row"><span class="p">~/code/app-a</span>  <span class="dim">⇄ personal</span></div>
+      <div class="row"><span class="p">$</span> <span class="cmd">cd ../billing-service</span></div>
+      <div class="row"><span class="sw">⇄ convex account → work</span>  <span class="dim">(syntax-technology)</span></div>
+      <div class="row"><span class="p">$</span> <span class="cmd">bun run dev</span></div>
+      <div class="row"><span class="dim">  convex dev · deployment: work · ready in 0.8s</span> <span class="ok">✓</span></div>
+      <div class="row"><span class="p">$</span> <span class="cur"></span></div>
+    </div>
+  </div>
+</div>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">The problem</span>
+      <h2>Convex remembers one login. You have more than one.</h2>
+      <p>Every <span class="mono">convex</span> command reads your identity from a single global file —
+        <span class="mono">~/.convex/config.json</span>. Juggling a personal account, a work account and a
+        client's means constant <span class="mono">convex logout</span> / <span class="mono">login</span>,
+        and you can never run two accounts' projects at the same time.</p>
+      <p style="margin-top:14px"><b>cvx keeps a private vault of your account tokens and a map of project → account</b>,
+        then rewrites that one file to the right account as you move between folders. Because a running
+        <span class="mono">convex dev</span> keeps its own credentials, you can start five or six at once —
+        each on a different account, side by side.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Setup</span>
+      <h2>Three commands, then never again.</h2>
+      <p>Do this once per account and once per project. After that, <span class="mono">cd</span> is the only
+        command you need.</p>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="n">01</div>
+        <div>
+          <h3>Sign in to each account</h3>
+          <p>Opens a browser login and stores the token in your vault — verified against Convex, named by you.</p>
+          <div class="line"><span class="p">$</span> cvx login <span class="p">personal</span> &nbsp;·&nbsp; cvx login <span class="p">work</span></div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="n">02</div>
+        <div>
+          <h3>Bind a project to an account</h3>
+          <p>One account can own many projects. Nothing is written into the repo — the binding lives in the vault.</p>
+          <div class="line"><span class="p">$</span> cd ~/code/app-a &amp;&amp; cvx link <span class="p">personal</span></div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="n">03</div>
+        <div>
+          <h3>Install the shell hook</h3>
+          <p>Auto-detects your shell — zsh, bash or PowerShell — and wires the switch into <span class="mono">cd</span>.</p>
+          <div class="line"><span class="p">$</span> cvx hook --install</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Install</span>
+      <h2>Grab the binary from wherever you live.</h2>
+      <p>A single self-contained binary — macOS, Linux and Windows. Same <span class="mono">cvx</span> command everywhere.</p>
+    </div>
+    <div class="installs">
+      <div class="inst" data-copy="brew install rafay99-epic/apps/cvx">
+        <span class="who">Homebrew</span><code>brew install rafay99-epic/apps/cvx</code>
+        <button class="copybtn" aria-label="Copy">copy</button>
+      </div>
+      <div class="inst" data-copy="npm install -g @rafay99/cvx">
+        <span class="who">npm</span><code>npm install -g @rafay99/cvx</code>
+        <button class="copybtn" aria-label="Copy">copy</button>
+      </div>
+      <div class="inst" data-copy="bun add -g @rafay99/cvx">
+        <span class="who">Bun</span><code>bun add -g @rafay99/cvx</code>
+        <button class="copybtn" aria-label="Copy">copy</button>
+      </div>
+      <div class="inst" data-copy="pnpm add -g @rafay99/cvx">
+        <span class="who">pnpm</span><code>pnpm add -g @rafay99/cvx</code>
+        <button class="copybtn" aria-label="Copy">copy</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">What you get</span>
+      <h2>Small utility, no surprises.</h2>
+    </div>
+    <div class="feat">
+      <div class="f">
+        <div class="t"><span class="g">⇄</span> Automatic on cd</div>
+        <p>A shell hook activates the linked account the moment you enter a project. Plain <span class="mono">bun run dev</span> just works.</p>
+      </div>
+      <div class="f">
+        <div class="t"><span class="g">∥</span> Truly simultaneous</div>
+        <p>Each running dev server keeps its own credentials — start five or six accounts across five or six terminals.</p>
+      </div>
+      <div class="f">
+        <div class="t"><span class="g">◆</span> Nothing in your repos</div>
+        <p>No deploy keys, no <span class="mono">.env.local</span> tokens. Credentials stay in a private vault, chmod&nbsp;600.</p>
+      </div>
+      <div class="f">
+        <div class="t"><span class="g">▚</span> Every shell, every OS</div>
+        <p>zsh, bash and PowerShell on macOS, Linux and Windows. One prebuilt binary per platform.</p>
+      </div>
+      <div class="f">
+        <div class="t"><span class="g">✓</span> Honest about state</div>
+        <p><span class="mono">cvx doctor</span> checks your setup; <span class="mono">cvx status</span> and <span class="mono">ls</span> show exactly what's active where.</p>
+      </div>
+      <div class="f">
+        <div class="t"><span class="g">↺</span> Reversible</div>
+        <p><span class="mono">unlink</span>, re-point, or <span class="mono">rm</span> an account anytime. It only ever touches one config file.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot">
+    <div class="l">
+      <a href="https://github.com/rafay99-epic/convex-switch">GitHub</a>
+      <a href="https://www.npmjs.com/package/@rafay99/cvx">npm</a>
+      <a href="https://github.com/rafay99-epic/convex-switch#readme">Docs</a>
+      <a href="https://rafay99.com">rafay99.com</a>
+    </div>
+    <div class="r">MIT · built by Abdul Rafay</div>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var root = document.documentElement;
+    document.getElementById("theme").addEventListener("click", function () {
+      var cur = root.getAttribute("data-theme");
+      if (!cur) cur = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      root.setAttribute("data-theme", cur === "dark" ? "light" : "dark");
+    });
+
+    function wire(el) {
+      var btn = el.querySelector(".copybtn");
+      if (!btn) return;
+      btn.addEventListener("click", function () {
+        var text = el.getAttribute("data-copy");
+        if (!navigator.clipboard) return;
+        navigator.clipboard.writeText(text).then(function () {
+          var old = btn.textContent;
+          btn.textContent = "copied"; btn.classList.add("done");
+          setTimeout(function () { btn.textContent = old; btn.classList.remove("done"); }, 1400);
+        });
+      });
+    }
+    document.querySelectorAll("[data-copy]").forEach(wire);
+
+    var rows = document.querySelectorAll("#term .row");
+    rows.forEach(function (r, i) { r.style.animationDelay = (0.15 + i * 0.28) + "s"; });
+  })();
+</script>
+</body>
+</html>
