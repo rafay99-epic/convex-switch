@@ -1,0 +1,30 @@
+src/colors.ts
+  s_326bad0e8bda7f::t_863719ab57c794 1-26
+src/ui.ts
+  s_326bad0e8bda7f::t_f89849ecf95d5f 8,10-11
+  s_326bad0e8bda7f::t_7f3d1e3b89bae7 40
+.github/workflows/release.yml
+  s_326bad0e8bda7f::t_4e514f15a1b81f 70-79
+.github/scripts/publish-npm.sh
+  s_326bad0e8bda7f::t_367ccf7665fc4e 1-102
+npm/launcher.js
+  s_326bad0e8bda7f::t_a215127cab34ad 1-30
+README.md
+  s_326bad0e8bda7f::t_ac79cad92dd942 60-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "65f08a426e538e8e36e72e83a97f96c1a9872050",
+  "prompts": {},
+  "sessions": {
+    "s_326bad0e8bda7f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c31b8df-1252-41be-801e-81f849ff95bd",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
