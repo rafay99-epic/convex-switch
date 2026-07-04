@@ -22,28 +22,24 @@ import {
   writeAccounts,
   tokenOf,
   makeTokenRecord,
-  detectBackend,
   activeAccountName,
   writeActive,
 } from "./store";
-import { type Backend, backendLabel } from "./keychain";
 import { bold, dim, green, yellow, red } from "./ui";
 
-/** Commands that must never trigger the interactive migration. */
+/**
+ * Commands that must never trigger the interactive migration: the cd-hook
+ * (`activate`), prompt segment (`prompt`), scripting (`which`), and the
+ * completion system (`completions`). EVERYTHING a human types interactively —
+ * including bare `cvx`, `help`, and `version` — goes through migration, so an
+ * upgrading user sees the prompt no matter what their first command is.
+ */
 export const MIGRATION_EXEMPT = new Set<string | undefined>([
   "activate",
   "prompt",
   "which",
   "completions",
   "completion",
-  "hook",
-  "version",
-  "-v",
-  "--version",
-  "help",
-  "-h",
-  "--help",
-  undefined,
 ]);
 
 export function migrationNeeded(): boolean {
@@ -72,37 +68,32 @@ export async function maybeMigrate() {
   // records still resolve, so the command runs; the prompt fires next time.
   if (!process.stdin.isTTY || !process.stdout.isTTY) return;
 
-  const target = detectBackend();
   console.log();
-  console.log(`${yellow("▲")}  ${bold("Convex Switch needs to upgrade your saved data.")}`);
-  console.log(
-    dim(
-      `   A vault from an older version was found (${names.length} account${names.length > 1 ? "s" : ""}).`,
-    ),
-  );
-  console.log(
-    dim(`   Your tokens will be re-secured in ${bold(backendLabel(target))} and the vault`),
-  );
-  console.log(dim(`   upgraded to the latest format. This is a one-time step.`));
-  console.log();
-
+  console.log(`${yellow("▲")} ${bold("Convex Switch needs to migrate your data to a new format.")}`);
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
-    // Mandatory — the only way forward is to migrate. Ctrl-C cancels the command.
-    await rl.question(`${bold("Press Enter to secure & upgrade")} ${dim("(Ctrl-C to cancel)")} `);
+    // Enter confirms; Ctrl-C cancels the command (migration not done).
+    await rl.question(dim("  Press Enter to migrate · Ctrl-C to cancel "));
   } finally {
     rl.close();
   }
 
-  process.stdout.write(dim("   Migrating… "));
-  runMigration(accounts, cfg, target);
+  process.stdout.write(dim("  Migrating… "));
+  runMigration(accounts, cfg);
 }
 
-function runMigration(accounts: Accounts, cfg: Config, preferred: Backend) {
+/**
+ * Re-secure every token into the encrypted FILE vault (chmod 600) and stamp the
+ * schema. The migration deliberately does NOT touch the OS keychain: a keychain
+ * write can pop a blocking system dialog (locked keychain, SSH, headless) and
+ * this is a mandatory step every user hits. Keychain remains an explicit,
+ * user-initiated opt-in via `cvx keychain enable`.
+ */
+function runMigration(accounts: Accounts, cfg: Config) {
   const names = Object.keys(accounts);
 
-  // 1) Read every token up front (legacy inline tokens resolve via tokenOf).
-  //    Abort cleanly before touching anything if one can't be read.
+  // Read every token up front (legacy inline tokens resolve via tokenOf).
+  // Abort cleanly before touching anything if one can't be read.
   const tokens: Record<string, string> = {};
   for (const n of names) {
     const t = tokenOf(n, accounts[n]);
@@ -113,44 +104,19 @@ function runMigration(accounts: Accounts, cfg: Config, preferred: Backend) {
     tokens[n] = t;
   }
 
-  // 2) Build new records in the target backend. If the keychain write fails
-  //    (e.g. no keyring), fall back to the file vault so a mandatory migration
-  //    can never dead-end.
-  const build = (backend: Backend): Accounts => {
-    const next: Accounts = {};
-    for (const n of names) {
-      const rec = makeTokenRecord(backend, n, tokens[n]);
-      next[n] = { teams: accounts[n].teams, addedAt: accounts[n].addedAt, ...rec };
-    }
-    return next;
-  };
-
-  let backend = preferred;
-  let next: Accounts;
-  try {
-    next = build(preferred);
-  } catch (e) {
-    if (preferred === "file") {
-      console.log(red("failed"));
-      throw e;
-    }
-    console.log(yellow(`\n   ${backendLabel(preferred)} unavailable — keeping the encrypted file vault.`));
-    backend = "file";
-    next = build("file");
+  // Rewrite records in the file vault (makeTokenRecord("file", …) can't fail).
+  const next: Accounts = {};
+  for (const n of names) {
+    const rec = makeTokenRecord("file", n, tokens[n]);
+    next[n] = { teams: accounts[n].teams, addedAt: accounts[n].addedAt, ...rec };
   }
 
-  // 3) Commit, then stamp the schema + chosen backend.
   writeAccounts(next);
-  writeConfig({ ...cfg, storage: backend, schemaVersion: SCHEMA });
+  writeConfig({ ...cfg, storage: "file", schemaVersion: SCHEMA });
   const active = activeAccountName(next);
   if (active) writeActive(active);
 
   console.log(green("done"));
-  console.log();
-  console.log(
-    `${green("✓")} ${bold("Upgraded.")} ${names.length} account${names.length > 1 ? "s" : ""} secured in ${bold(backendLabel(backend))}.`,
-  );
-  if (backend !== "file")
-    console.log(dim(`   Prefer the file vault? Run  ${bold("cvx keychain disable")}.`));
+  console.log(`${green("✓")} ${bold("You're good to go.")}`);
   console.log();
 }

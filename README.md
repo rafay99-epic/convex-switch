@@ -185,11 +185,12 @@ cvx completions zsh >> ~/.zshrc         # tab-complete commands + account names
 
 The vault is schema-versioned. The first time you run an interactive `cvx`
 command after updating from an older release, cvx shows a one-time prompt and,
-on confirmation, re-secures your tokens in the best available backend (OS
-keychain if present, otherwise the chmod-600 file vault) and upgrades the vault
-format. It's mandatory and runs once — you never see it again. The cd-hook and
-scripts keep working throughout; the prompt only appears in an interactive
-terminal.
+on confirmation, re-secures your tokens in the encrypted file vault (chmod 600)
+and upgrades the vault format. It's mandatory and runs once — you never see it
+again. The cd-hook and scripts keep working throughout; the prompt only appears
+in an interactive terminal. (Migration deliberately stays out of the OS keychain
+to avoid keychain prompts during a mandatory step — opt in later with
+`cvx keychain enable`.)
 
 ## Project layout
 
