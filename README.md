@@ -1,4 +1,4 @@
-# convex-switch (`cvx`)
+# Convex Switch (`cvx`)
 
 Run multiple Convex accounts across multiple projects at once — without
 logging in and out, without deploy keys, and without putting any secrets in
@@ -60,16 +60,17 @@ exec zsh             # reload your shell
 **npm / bun / pnpm** — installs the same prebuilt binary:
 
 ```bash
-npm install -g convex-switch     # or: bun add -g convex-switch
-pnpm add -g convex-switch        # or: pnpm
+npm install -g @rafay99/cvx      # or: bun add -g @rafay99/cvx
+pnpm add -g @rafay99/cvx
 cvx hook --install
 exec zsh
 ```
 
 > Distributed the esbuild way: per-platform packages
-> (`convex-switch-<os>-<arch>`) carry the binary, gated by `os`/`cpu`, and a
-> tiny launcher in the main package execs it. No postinstall — so it works
-> under `bun add -g` and `--ignore-scripts` too.
+> (`@rafay99/cvx-<os>-<arch>`) carry the binary, gated by `os`/`cpu`, and a
+> tiny launcher in the main package (`@rafay99/cvx`) execs it. No postinstall —
+> so it works under `bun add -g` and `--ignore-scripts` too. The command you
+> type is still `cvx`.
 
 **From source** (Bun):
 

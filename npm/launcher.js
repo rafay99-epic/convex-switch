@@ -8,14 +8,14 @@
  */
 const { spawnSync } = require("child_process");
 
-const target = `convex-switch-${process.platform}-${process.arch}`;
+const target = `@rafay99/cvx-${process.platform}-${process.arch}`;
 
 let binary;
 try {
   binary = require.resolve(`${target}/bin/cvx`);
 } catch {
   console.error(
-    `convex-switch: no prebuilt binary for ${process.platform}-${process.arch}.\n` +
+    `cvx: no prebuilt binary for ${process.platform}-${process.arch}.\n` +
       `Supported: darwin-arm64, darwin-x64, linux-x64, linux-arm64.\n` +
       `If your platform is supported, reinstall without --no-optional.`,
   );

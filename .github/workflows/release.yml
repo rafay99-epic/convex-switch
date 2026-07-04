@@ -72,7 +72,7 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           if [ -z "${NPM_TOKEN:-}" ]; then
-            echo "::warning::NPM_TOKEN not set — skipping npm publish. Add an npm automation token as the NPM_TOKEN secret to publish convex-switch + its 4 platform packages."
+            echo "::warning::NPM_TOKEN not set — skipping npm publish. Add an npm automation token as the NPM_TOKEN secret to publish @rafay99/cvx + its 4 platform packages."
             exit 0
           fi
           bash .github/scripts/publish-npm.sh

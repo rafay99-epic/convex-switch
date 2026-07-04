@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
-# Publish convex-switch to npm as a distribution channel for the prebuilt
+# Publish @rafay99/cvx to npm as a distribution channel for the prebuilt
 # binaries (the same ones Homebrew ships). Uses the esbuild/biome model:
 #
-#   convex-switch                      main package: a launcher + optionalDeps
-#   convex-switch-darwin-arm64  ┐
-#   convex-switch-darwin-x64    │  per-platform packages, each carrying one
-#   convex-switch-linux-x64     │  compiled `cvx` binary, gated by os/cpu
-#   convex-switch-linux-arm64   ┘
+#   @rafay99/cvx                     main package: a launcher + optionalDeps
+#   @rafay99/cvx-darwin-arm64  ┐
+#   @rafay99/cvx-darwin-x64    │  per-platform packages, each carrying one
+#   @rafay99/cvx-linux-x64     │  compiled `cvx` binary, gated by os/cpu
+#   @rafay99/cvx-linux-arm64   ┘
 #
 # npm/bun/pnpm install only the platform package matching the user's machine,
 # and the launcher execs its binary — no postinstall, so `bun add -g` works too.
@@ -21,7 +21,7 @@ VERSION="${VERSION:?VERSION env var required}"   # e.g. 0.42  (Homebrew-style)
 : "${NPM_TOKEN:?NPM_TOKEN env var required}"
 DIST="${1:-dist}"
 NPM_VERSION="${VERSION}.0"                        # 0.42 -> 0.42.0 (valid semver)
-NAME="convex-switch"
+NAME="@rafay99/cvx"                               # scoped: command stays `cvx`
 REPO="https://github.com/rafay99-epic/convex-switch"
 
 # Platform matrix: <os> <arch> <tarball-suffix>  (os/arch = node's platform/arch)
@@ -49,8 +49,8 @@ publish_if_new() { # <dir> <pkg-name>
 # --- per-platform packages (publish these first, main depends on them) ------
 for entry in "${PLATFORMS[@]}"; do
   read -r os arch <<<"$entry"
-  pkg="${NAME}-${os}-${arch}"
-  dir="$WORK/$pkg"
+  pkg="${NAME}-${os}-${arch}"          # e.g. @rafay99/cvx-darwin-arm64
+  dir="$WORK/plat-${os}-${arch}"       # flat dir (pkg name has a '/')
   mkdir -p "$dir/bin"
   tar -xzf "$DIST/cvx-${os}-${arch}.tar.gz" -C "$dir/bin" cvx
   chmod +x "$dir/bin/cvx"
@@ -71,7 +71,7 @@ JSON
 done
 
 # --- main package: launcher + optionalDependencies --------------------------
-main="$WORK/$NAME"
+main="$WORK/main"
 mkdir -p "$main"
 cp npm/launcher.js "$main/launcher.js"
 cp man/cvx.1 "$main/cvx.1"
@@ -99,4 +99,4 @@ JSON
 echo "→ publishing ${NAME}@${NPM_VERSION}"
 publish_if_new "$main" "$NAME"
 
-echo "::notice::Published convex-switch ${NPM_VERSION} to npm (main + 4 platform packages)."
+echo "::notice::Published ${NAME} ${NPM_VERSION} to npm (main + 4 platform packages)."
