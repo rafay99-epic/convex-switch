@@ -1,0 +1,45 @@
+src/ui.ts
+  s_326bad0e8bda7f::t_cd2388455dc4a0 1-111
+.github/workflows/release.yml
+  s_326bad0e8bda7f::t_39784cb5a44017 44,49
+README.md
+  s_326bad0e8bda7f::t_66d8bd2218d7b6 126-142
+src/store.ts
+  s_326bad0e8bda7f::t_7e4383d5fa7f38 1-145
+src/commands.ts
+  s_326bad0e8bda7f::t_ea44bc460bd83a 1-238
+.github/scripts/bump-formula.sh
+  s_326bad0e8bda7f::t_1f044d883760f1 68
+man/cvx.1
+  s_326bad0e8bda7f::t_1dab3e7204ace8 1-105
+src/args.ts
+  s_326bad0e8bda7f::t_c7fe7d4dc6f4bf 1-18
+bin/cvx.ts
+  s_326bad0e8bda7f::t_52bf00e19aeba2 3-12,15,18-30,61-66,71-76
+  s_326bad0e8bda7f::t_c6dc3dd6b060ab 16
+  s_21a608cf6ff9c5::t_0d8bef900551fe 77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5adc158b436a0181eb208c65a345181efd802f75",
+  "prompts": {},
+  "sessions": {
+    "s_21a608cf6ff9c5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f0ba3863-e894-4c2a-beba-b95f0517e105",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    },
+    "s_326bad0e8bda7f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c31b8df-1252-41be-801e-81f849ff95bd",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
