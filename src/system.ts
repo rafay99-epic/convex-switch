@@ -22,3 +22,18 @@ export function hasCommand(cmd: string): boolean {
     return false;
   }
 }
+
+/** Open a URL in the user's default browser. Returns false if it couldn't. */
+export function openUrl(url: string): boolean {
+  try {
+    const r =
+      process.platform === "darwin"
+        ? spawnSync("open", [url], { stdio: "ignore" })
+        : process.platform === "win32"
+          ? spawnSync("cmd", ["/c", "start", "", url], { stdio: "ignore" })
+          : spawnSync("xdg-open", [url], { stdio: "ignore" });
+    return !r.error && (r.status === 0 || r.status === null);
+  } catch {
+    return false;
+  }
+}

@@ -14,6 +14,13 @@ import {
   realpathSync,
 } from "node:fs";
 import { join, resolve, dirname } from "node:path";
+import {
+  type Backend,
+  detectBackend,
+  storeToken,
+  loadToken,
+  deleteToken,
+} from "./keychain";
 
 // Placeholder for local/dev runs; the release workflow stamps the real
 // 0.<commit-count> version into this line before compiling (see release.yml).
@@ -25,6 +32,8 @@ export const HOME = homedir();
 export const VAULT = join(HOME, ".convex-switch");
 export const ACCOUNTS_FILE = join(VAULT, "accounts.json");
 export const LINKS_FILE = join(VAULT, "links.json");
+export const CONFIG_FILE = join(VAULT, "config.json");
+export const ACTIVE_FILE = join(VAULT, "active");
 export const WELCOME_MARKER = join(VAULT, ".welcomed");
 export const CONVEX_CONFIG = join(HOME, ".convex", "config.json");
 export const API_TEAMS = "https://api.convex.dev/api/teams";
@@ -33,9 +42,21 @@ export const CLIENT = `convex-switch/${VERSION}`;
 // --- Types ------------------------------------------------------------------
 
 export type Team = { slug: string; name: string };
-export type Account = { token: string; teams: Team[]; addedAt: string };
+/**
+ * An account's token lives in exactly one place: inline (`token`, the default
+ * file vault), the OS keychain (`keychain: true`), or a DPAPI blob (`enc`, on
+ * Windows). Resolve with tokenOf(); never read `.token` directly.
+ */
+export type Account = {
+  token?: string;
+  keychain?: boolean;
+  enc?: string;
+  teams: Team[];
+  addedAt: string;
+};
 export type Accounts = Record<string, Account>;
 export type Links = Record<string, string>; // absolute project path -> account name
+export type Config = { storage?: Backend };
 
 // --- Vault I/O (dir 700, files 600) -----------------------------------------
 
@@ -86,6 +107,52 @@ export const readAccounts = () => readVaultJSON<Accounts>(ACCOUNTS_FILE, {});
 export const writeAccounts = (a: Accounts) => writeJSON(ACCOUNTS_FILE, a);
 export const readLinks = () => readVaultJSON<Links>(LINKS_FILE, {});
 export const writeLinks = (l: Links) => writeJSON(LINKS_FILE, l);
+export const readConfig = () => readVaultJSON<Config>(CONFIG_FILE, {});
+export const writeConfig = (c: Config) => writeJSON(CONFIG_FILE, c);
+
+// --- Token storage backend (file / OS keychain) -----------------------------
+
+/** The configured storage backend, defaulting to plain file. */
+export function storageBackend(): Backend {
+  return readConfig().storage ?? "file";
+}
+
+/** Best keychain backend available on this machine (for `keychain enable`). */
+export { detectBackend, deleteToken };
+
+/** Resolve an account's actual token from wherever its record keeps it. */
+export function tokenOf(name: string, acc: Account): string | null {
+  return loadToken(name, acc);
+}
+
+/** Build an account record that stores `token` via the given backend. */
+export function makeTokenRecord(backend: Backend, name: string, token: string) {
+  return storeToken(backend, name, token);
+}
+
+// --- Active-account marker --------------------------------------------------
+// A fast, name-only record of which account the global config currently holds,
+// so the cd-hook can no-op without reading (and, with keychain, without a slow
+// secret lookup) when the linked account is already active.
+
+export function readActive(): string | null {
+  try {
+    const v = readFileSync(ACTIVE_FILE, "utf8").trim();
+    return v || null;
+  } catch {
+    return null;
+  }
+}
+export function writeActive(name: string) {
+  try {
+    writeFileSync(ACTIVE_FILE, name + "\n", { mode: 0o600 });
+  } catch {}
+}
+export function clearActive() {
+  try {
+    if (existsSync(ACTIVE_FILE)) writeFileSync(ACTIVE_FILE, "", { mode: 0o600 });
+  } catch {}
+}
 
 // --- Convex global config (the single account switch) -----------------------
 
@@ -168,6 +235,46 @@ export function resolveLink(dir: string): { path: string; account: string } | nu
     if (parent === cur) return null;
     cur = parent;
   }
+}
+
+/**
+ * Read CONVEX_DEPLOYMENT from the nearest .env.local (walking up from dir).
+ * Returns the deployment name without its `dev:`/`prod:`/`local:` type prefix,
+ * or null. Used by `cvx open`.
+ */
+export function projectDeployment(dir: string): string | null {
+  let cur = canon(dir);
+  while (true) {
+    const envFile = join(cur, ".env.local");
+    if (existsSync(envFile)) {
+      try {
+        for (const line of readFileSync(envFile, "utf8").split(/\r?\n/)) {
+          const m = line.match(/^\s*CONVEX_DEPLOYMENT\s*=\s*(.+?)\s*(#.*)?$/);
+          if (m) {
+            let v = m[1].trim().replace(/^["']|["']$/g, "");
+            // strip an inline "# team: ..." comment tail and the type prefix
+            v = v.split("#")[0].trim();
+            return v.replace(/^(dev|prod|local|preview):/, "") || null;
+          }
+        }
+      } catch {
+        /* unreadable env — ignore */
+      }
+    }
+    const parent = dirname(cur);
+    if (parent === cur) return null;
+    cur = parent;
+  }
+}
+
+/** Name of the account whose token the global config currently holds. */
+export function activeAccountName(accounts: Accounts): string | null {
+  const cur = currentConvexToken();
+  if (!cur) return null;
+  const marked = readActive();
+  if (marked && accounts[marked] && tokenOf(marked, accounts[marked]) === cur) return marked;
+  for (const [name, acc] of Object.entries(accounts)) if (tokenOf(name, acc) === cur) return name;
+  return null;
 }
 
 // --- First-run state --------------------------------------------------------

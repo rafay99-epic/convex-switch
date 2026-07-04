@@ -5,11 +5,7 @@
  * files. It swaps the single global ~/.convex/config.json, which is the one
  * place the Convex CLI reads your account from.
  *
- * This file is just the entry point + dispatch. Logic lives in src/:
- *   store.ts     data layer (vault, config swap, verify, paths)
- *   ui.ts        colors, banner, welcome, help
- *   commands.ts  one function per subcommand
- *   args.ts      flag parsing
+ * This file is just the entry point + dispatch. Logic lives in src/.
  */
 
 import { ensureVault, isFirstRun, markWelcomed } from "../src/store";
@@ -17,16 +13,24 @@ import { die, help, welcome, bold } from "../src/ui";
 import {
   cmdAdd,
   cmdLogin,
+  cmdRefresh,
   cmdLink,
   cmdUnlink,
+  cmdRename,
   cmdRm,
   cmdActivate,
+  cmdUse,
+  cmdRun,
+  cmdOpen,
   cmdStatus,
   cmdAccounts,
   cmdLs,
   cmdWhich,
+  cmdPrompt,
   cmdVersion,
   cmdDoctor,
+  cmdKeychain,
+  cmdCompletions,
   cmdHook,
 } from "../src/commands";
 
@@ -38,29 +42,46 @@ async function main() {
       return cmdAdd(rest);
     case "login":
       return cmdLogin(rest);
+    case "refresh":
+      return cmdRefresh(rest);
     case "link":
       return cmdLink(rest);
     case "unlink":
       return cmdUnlink(rest);
+    case "rename":
+    case "mv":
+      return cmdRename(rest);
     case "rm":
     case "remove":
       return cmdRm(rest);
     case "activate":
-    case "use":
       return cmdActivate(rest);
+    case "use":
+      return cmdUse(rest);
+    case "run":
+      return cmdRun(rest);
+    case "open":
+      return cmdOpen();
     case "status":
-      return cmdStatus();
+      return cmdStatus(rest);
     case "accounts":
-      return cmdAccounts();
+      return cmdAccounts(rest);
     case "ls":
     case "list":
       return cmdLs();
     case "which":
       return cmdWhich(rest);
+    case "prompt":
+      return cmdPrompt();
+    case "keychain":
+      return cmdKeychain(rest);
+    case "completions":
+    case "completion":
+      return cmdCompletions(rest);
     case "hook":
       return cmdHook(rest);
     case "doctor":
-      return cmdDoctor();
+      return cmdDoctor(rest);
     case "welcome":
       return welcome();
     case "version":

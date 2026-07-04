@@ -5,7 +5,7 @@
  * into the shell's startup file.
  */
 
-export type Shell = "zsh" | "bash" | "powershell";
+export type Shell = "zsh" | "bash" | "powershell" | "fish" | "nu";
 
 // zsh: chpwd fires only on a real directory change — cheapest hook.
 export const HOOK_ZSH = `
@@ -54,14 +54,46 @@ if (-not $global:__cvx_hooked) {
 # --- end convex-switch -----------------------------------------------------
 `.trimStart();
 
+// fish: has a native "fire when a variable changes" event for $PWD.
+export const HOOK_FISH = `
+# --- convex-switch ---------------------------------------------------------
+# Auto-activate the linked Convex account when you cd into a project.
+function __convex_switch_hook --on-variable PWD
+  command cvx activate -q 2>/dev/null
+end
+__convex_switch_hook
+# --- end convex-switch -----------------------------------------------------
+`.trimStart();
+
+// Nushell: register a PWD env-change hook. Best-effort — hook syntax varies by
+// Nushell version; tested against recent releases.
+export const HOOK_NU = `
+# --- convex-switch ---------------------------------------------------------
+# Auto-activate the linked Convex account when you change directory.
+$env.config.hooks.env_change.PWD = (
+  $env.config.hooks.env_change.PWD? | default [] | append {|before, after| ^cvx activate -q }
+)
+# --- end convex-switch -----------------------------------------------------
+`.trimStart();
+
+export const SHELLS: Shell[] = ["zsh", "bash", "powershell", "fish", "nu"];
+
 export function hookFor(shell: Shell): string {
-  return shell === "bash" ? HOOK_BASH : shell === "powershell" ? HOOK_PWSH : HOOK_ZSH;
+  switch (shell) {
+    case "bash": return HOOK_BASH;
+    case "powershell": return HOOK_PWSH;
+    case "fish": return HOOK_FISH;
+    case "nu": return HOOK_NU;
+    default: return HOOK_ZSH;
+  }
 }
 
 /** Best-effort shell detection when the user doesn't pass --shell. */
 export function detectShell(): Shell {
   if (process.platform === "win32") return "powershell";
   const sh = process.env.SHELL ?? "";
+  if (sh.includes("fish")) return "fish";
+  if (sh.includes("nu")) return "nu";
   if (sh.includes("bash")) return "bash";
   return "zsh"; // default on unix
 }
