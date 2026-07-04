@@ -1,0 +1,30 @@
+src/commands.ts
+  s_d679e3b5467c5a::t_89b69a1eec11ae 234
+  s_d679e3b5467c5a::t_ff54b5805ae855 93-98
+  s_d679e3b5467c5a::t_f45fafeb274ade 120-123
+  s_d679e3b5467c5a::t_ea0c569565798d 39
+  s_d679e3b5467c5a::t_90dde899d2f550 216-218
+  s_d679e3b5467c5a::t_caa6d31b14f72c 636-637,644-649,652-656
+  s_d679e3b5467c5a::t_50ecdec33ab29e 250-253
+  s_d679e3b5467c5a::t_260ebdf7249fe2 309,314
+src/store.ts
+  s_d679e3b5467c5a::t_4df9a1fd6fed39 181,183,185,189-201
+src/args.ts
+  s_d679e3b5467c5a::t_58a36144c848d0 22-27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4301edf92dd745868cff75de95f0a2f2569233c2",
+  "prompts": {},
+  "sessions": {
+    "s_d679e3b5467c5a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e026300c-e577-40d9-8080-e0f2676d989b",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
