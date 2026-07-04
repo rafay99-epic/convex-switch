@@ -1,0 +1,76 @@
+src/hooks.ts
+  s_d679e3b5467c5a::t_ada8d77c3d0f2f 10-24
+  s_d679e3b5467c5a::t_0b515dc6b88013 26,36,54,73,85
+.github/scripts/publish-npm.sh
+  s_d679e3b5467c5a::t_b1259c1e0e107c 78,99,101
+src/ui.ts
+  s_d679e3b5467c5a::t_4ec2217bea0f32 95
+  s_d679e3b5467c5a::t_39d40c5dbec989 6,11
+src/commands.ts
+  s_d679e3b5467c5a::t_a486bb671f2ae4 622,626
+  s_d679e3b5467c5a::t_65141242333ce1 136-147,151,158,169
+  s_d679e3b5467c5a::t_a3d9df10f09660 339-342,347
+  s_d679e3b5467c5a::t_2b70f5bb61685a 642-643
+  s_d679e3b5467c5a::t_8650015853d377 10
+  s_d679e3b5467c5a::t_44ab015bcbc21a 90
+  s_d679e3b5467c5a::t_fd84a9222a1dd1 207,214,216-217,221,224,228-230,240
+  s_d679e3b5467c5a::t_cc13344c6dcf69 519-520
+  s_d679e3b5467c5a::t_b9c8e34079e249 115
+  s_d679e3b5467c5a::t_83cd2dbd1434e5 586,591-592
+  s_d679e3b5467c5a::t_ebe90a5df5d101 685-686,688
+  s_d679e3b5467c5a::t_4bf5ee640f7313 733
+  s_d679e3b5467c5a::t_687b6744f8c9e0 8
+  s_d679e3b5467c5a::t_f18dab1ee5a7b7 58-75
+  s_d679e3b5467c5a::t_fc5122c6a72280 129
+  s_d679e3b5467c5a::t_2c1dbdf7d77cf5 649
+  s_d679e3b5467c5a::t_342deaa63c0123 296-305,313,319
+  s_d679e3b5467c5a::t_cbd7e6c128bb0e 707,709
+  s_d679e3b5467c5a::t_78a472f97fac79 32-33,39
+  s_d679e3b5467c5a::t_3a639cddaa73b5 565
+  s_d679e3b5467c5a::t_c7409f2f31fc9f 220
+  s_d679e3b5467c5a::t_fe4f9600c347a9 254-256
+  s_d679e3b5467c5a::t_e0a0a1434ad1eb 366-367,375
+  s_d679e3b5467c5a::t_7ba9371ab993b0 554,556-558
+bin/cvx.ts
+  s_d679e3b5467c5a::t_1228ac0b0c51e0 73
+README.md
+  s_d679e3b5467c5a::t_b019148f5777e5 188
+src/store.ts
+  s_d679e3b5467c5a::t_1c961970e3c7ce 111-119,125-126
+  s_d679e3b5467c5a::t_f1e38718cdb289 127,156-170
+  s_d679e3b5467c5a::t_d0b08460598b83 172-179,183-184,189-200,202-203
+  s_d679e3b5467c5a::t_c03acc0cebbcea 8,14
+  s_d679e3b5467c5a::t_fc6007f5479a2a 35-42
+  s_d679e3b5467c5a::t_d3c365e7063bf9 307-311
+  s_d679e3b5467c5a::t_5c4cb08566be10 215-216,225
+  s_d679e3b5467c5a::t_b4b2f09297da5e 85,98
+  s_d679e3b5467c5a::t_2b9a32292d664d 128
+src/args.ts
+  s_d679e3b5467c5a::t_1dc7a40a345b01 1-11,17-28,31-33
+src/keychain.ts
+  s_d679e3b5467c5a::t_3d9bb6206cf99d 24-28
+  s_d679e3b5467c5a::t_9e02ca79caada3 57-59
+  s_d679e3b5467c5a::t_7795bbeee3dae5 41
+  s_d679e3b5467c5a::t_07f5dbe182c003 75-77
+  s_d679e3b5467c5a::t_6cd6ed33416fe1 143-150
+src/migrate.ts
+  s_d679e3b5467c5a::t_b4ed413534df2b 4-6,25-26,59,79-81,85-91,94-102,107,111-112,114
+npm/launcher.cjs
+  s_d679e3b5467c5a::t_56bd871f0cdb9e 31-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "abf61c08451d65f4740157f339e3a7fd23bde153",
+  "prompts": {},
+  "sessions": {
+    "s_d679e3b5467c5a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e026300c-e577-40d9-8080-e0f2676d989b",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
