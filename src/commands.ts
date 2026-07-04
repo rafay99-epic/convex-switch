@@ -1,8 +1,10 @@
 /** commands — one function per subcommand. Glue between store + ui. */
 
-import { existsSync, readFileSync, appendFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, readFileSync, appendFileSync, mkdirSync } from "node:fs";
+import { join, resolve, dirname } from "node:path";
 import { spawnSync } from "node:child_process";
+
+import { type Shell, hookFor, detectShell } from "./hooks";
 
 import {
   HOME,
@@ -211,28 +213,52 @@ export function cmdVersion() {
   console.log(VERSION);
 }
 
-const HOOK = `
-# --- convex-switch ---------------------------------------------------------
-# Auto-activate the linked Convex account when you cd into a project.
-_convex_switch_hook() { command cvx activate -q 2>/dev/null }
-autoload -Uz add-zsh-hook 2>/dev/null && add-zsh-hook chpwd _convex_switch_hook
-_convex_switch_hook   # run once for the current directory
-# --- end convex-switch -----------------------------------------------------
-`.trimStart();
-
 export function cmdHook(args: string[]) {
   const flags = parseFlags(args);
-  if (flags.install) {
-    const rc = join(HOME, ".zshrc");
-    const body = existsSync(rc) ? readFileSync(rc, "utf8") : "";
-    if (body.includes("convex-switch")) {
-      console.log(yellow("Hook already present in ~/.zshrc — nothing to do."));
-      return;
-    }
-    appendFileSync(rc, "\n" + HOOK);
-    console.log(`${green("✓")} Added hook to ${cyan("~/.zshrc")}.`);
-    console.log(dim("  Open a new terminal (or run `source ~/.zshrc`) to activate it."));
+  const shell = (flags.shell as Shell) || detectShell();
+  if (!["zsh", "bash", "powershell"].includes(shell))
+    die(`Unknown shell ${bold(String(shell))}. Use --shell zsh|bash|powershell.`);
+  const snippet = hookFor(shell);
+
+  if (!flags.install) {
+    process.stdout.write(snippet); // print for manual install
     return;
   }
-  process.stdout.write(HOOK); // print for manual install / other shells
+  if (shell === "powershell") return installPwsh(snippet);
+
+  // zsh / bash → append to the shell's rc file.
+  const rc = join(HOME, shell === "bash" ? ".bashrc" : ".zshrc");
+  const body = existsSync(rc) ? readFileSync(rc, "utf8") : "";
+  if (body.includes("convex-switch")) {
+    console.log(yellow(`Hook already present in ${shortPath(rc)} — nothing to do.`));
+    return;
+  }
+  appendFileSync(rc, "\n" + snippet);
+  console.log(`${green("✓")} Added hook to ${cyan(shortPath(rc))}.`);
+  console.log(dim(`  Open a new terminal (or run \`source ${shortPath(rc)}\`) to activate it.`));
+}
+
+/** Install into the PowerShell profile — ask PowerShell itself where it is. */
+function installPwsh(snippet: string) {
+  const ask = (exe: string) => {
+    const r = spawnSync(exe, ["-NoProfile", "-Command", "$PROFILE.CurrentUserAllHosts"], {
+      encoding: "utf8",
+    });
+    return r.status === 0 ? r.stdout.trim() : "";
+  };
+  const profile = ask("pwsh") || ask("powershell");
+  if (!profile) {
+    console.log(yellow("Couldn't find PowerShell. Add this to your $PROFILE manually:") + "\n");
+    process.stdout.write(snippet);
+    return;
+  }
+  const body = existsSync(profile) ? readFileSync(profile, "utf8") : "";
+  if (body.includes("convex-switch")) {
+    console.log(yellow(`Hook already present in ${profile} — nothing to do.`));
+    return;
+  }
+  mkdirSync(dirname(profile), { recursive: true });
+  appendFileSync(profile, "\n" + snippet);
+  console.log(`${green("✓")} Added hook to ${cyan(profile)}.`);
+  console.log(dim("  Open a new PowerShell window to activate it."));
 }

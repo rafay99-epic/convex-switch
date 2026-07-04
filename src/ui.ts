@@ -76,7 +76,7 @@ ${bold("Setup")} ${dim("(one-time per account)")}
 ${bold("Wire projects to accounts")}
   cvx link <account> [path]     link a project dir (default: cwd) to an account
   cvx unlink [path]             remove a link
-  cvx hook --install            add the cd-hook to ~/.zshrc (do this once)
+  cvx hook --install            add the auto-switch hook to your shell (zsh/bash/pwsh)
 
 ${bold("Everyday")}
   cd <project> && bun run dev   the linked account is activated automatically
