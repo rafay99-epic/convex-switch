@@ -1,0 +1,21 @@
+.github/scripts/bump-formula.sh
+  s_326bad0e8bda7f::t_454dbbf23f83f2 1-123
+.github/workflows/release.yml
+  s_326bad0e8bda7f::t_621f8856b873a0 1-77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "cf4f744bf80a3487952567e9752f4612cf46c1e0",
+  "prompts": {},
+  "sessions": {
+    "s_326bad0e8bda7f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c31b8df-1252-41be-801e-81f849ff95bd",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
