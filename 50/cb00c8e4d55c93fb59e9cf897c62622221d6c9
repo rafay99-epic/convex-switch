@@ -1,0 +1,41 @@
+bin/cvx.ts
+  s_326bad0e8bda7f::t_55d8fb27154761 29
+  s_326bad0e8bda7f::t_0a1d072298be5b 62-63
+  s_326bad0e8bda7f::t_22c29626042f60 86-90
+src/ui.ts
+  s_326bad0e8bda7f::t_bab15a77a0e1e1 91
+man/cvx.1
+  s_326bad0e8bda7f::t_ae9e0d4b21df58 67-72
+src/commands.ts
+  s_326bad0e8bda7f::t_187c68a055d337 96-99
+  s_326bad0e8bda7f::t_7499aeaeb2bba4 3,8
+  s_326bad0e8bda7f::t_14ea9c01a580e2 69-74,78-83
+  s_326bad0e8bda7f::t_0bd7026400732b 147-172
+  s_326bad0e8bda7f::t_68357efd8faf44 236-300
+src/store.ts
+  s_326bad0e8bda7f::t_e3532ff2540816 83,85
+  s_326bad0e8bda7f::t_f0910cb8157832 49,58-72
+  s_326bad0e8bda7f::t_42358b93ceffcf 115-126,130-136
+  s_326bad0e8bda7f::t_c4bd9d28a711c3 73-75
+README.md
+  s_326bad0e8bda7f::t_1783e60e20cf2c 144
+  s_326bad0e8bda7f::t_a7f1823da9f91e 156-157,159-160,162
+src/system.ts
+  s_326bad0e8bda7f::t_e30b2ac8d900dc 1-24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "50cb00c8e4d55c93fb59e9cf897c62622221d6c9",
+  "prompts": {},
+  "sessions": {
+    "s_326bad0e8bda7f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c31b8df-1252-41be-801e-81f849ff95bd",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
