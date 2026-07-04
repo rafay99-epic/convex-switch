@@ -1,0 +1,19 @@
+src/migrate.ts
+  s_326bad0e8bda7f::t_b45cf63d1a7955 32-38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "03eaabbf1d70e2e54819e402219fe3c04a7a5e1e",
+  "prompts": {},
+  "sessions": {
+    "s_326bad0e8bda7f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c31b8df-1252-41be-801e-81f849ff95bd",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
