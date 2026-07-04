@@ -1,0 +1,28 @@
+src/store.ts
+  s_326bad0e8bda7f::t_795f9a6242e4e5 42-45
+  s_326bad0e8bda7f::t_84929977b46420 63
+  s_326bad0e8bda7f::t_e8a06aaf62706e 68-72,79
+src/migrate.ts
+  s_326bad0e8bda7f::t_6650818e42f457 1-156
+bin/cvx.ts
+  s_326bad0e8bda7f::t_afac9146d2d761 41-48
+  s_326bad0e8bda7f::t_e5f64fe04569a3 12
+README.md
+  s_326bad0e8bda7f::t_56f8376a1f1f31 184-193
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "88e4bb8eba88af1e317813e58e9154a261791025",
+  "prompts": {},
+  "sessions": {
+    "s_326bad0e8bda7f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c31b8df-1252-41be-801e-81f849ff95bd",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
