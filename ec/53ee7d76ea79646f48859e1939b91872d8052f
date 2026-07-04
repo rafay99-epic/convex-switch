@@ -1,0 +1,29 @@
+man/cvx.1
+  s_326bad0e8bda7f::t_1896f4c45bca9d 40-43
+src/ui.ts
+  s_326bad0e8bda7f::t_03b8aa2d343670 79
+src/hooks.ts
+  s_326bad0e8bda7f::t_7eafa092e57b67 1-67
+README.md
+  s_326bad0e8bda7f::t_7296de17717090 76-79
+src/commands.ts
+  s_326bad0e8bda7f::t_93ba5161a5764d 218-257,260-263
+  s_326bad0e8bda7f::t_35228f62f4fab2 3-4,7
+  s_326bad0e8bda7f::t_9554753e303405 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ec53ee7d76ea79646f48859e1939b91872d8052f",
+  "prompts": {},
+  "sessions": {
+    "s_326bad0e8bda7f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c31b8df-1252-41be-801e-81f849ff95bd",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
