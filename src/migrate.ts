@@ -29,21 +29,19 @@ import {
 import { type Backend, backendLabel } from "./keychain";
 import { bold, dim, green, yellow, red } from "./ui";
 
-/** Commands that must never trigger the interactive migration. */
+/**
+ * Commands that must never trigger the interactive migration: the cd-hook
+ * (`activate`), prompt segment (`prompt`), scripting (`which`), and the
+ * completion system (`completions`). EVERYTHING a human types interactively —
+ * including bare `cvx`, `help`, and `version` — goes through migration, so an
+ * upgrading user sees the prompt no matter what their first command is.
+ */
 export const MIGRATION_EXEMPT = new Set<string | undefined>([
   "activate",
   "prompt",
   "which",
   "completions",
   "completion",
-  "hook",
-  "version",
-  "-v",
-  "--version",
-  "help",
-  "-h",
-  "--help",
-  undefined,
 ]);
 
 export function migrationNeeded(): boolean {
