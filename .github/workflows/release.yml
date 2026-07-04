@@ -44,18 +44,20 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          cp man/cvx.1 dist/cvx.1   # shipped in every tarball for `man cvx`
-          build() { # <bun-target> <os> <arch>
-            echo "→ building $2-$3"
-            bun build ./bin/cvx.ts --compile --minify --target="bun-$1" --outfile dist/cvx
-            chmod +x dist/cvx
-            tar -C dist -czf "dist/cvx-$2-$3.tar.gz" cvx cvx.1
-            rm dist/cvx
+          cp man/cvx.1 dist/cvx.1   # shipped in unix tarballs for `man cvx`
+          build() { # <bun-target> <os> <arch> <binname> [extra tar members...]
+            local target=$1 os=$2 arch=$3 bin=$4; shift 4
+            echo "→ building $os-$arch ($bin)"
+            bun build ./bin/cvx.ts --compile --minify --target="bun-$target" --outfile "dist/$bin"
+            chmod +x "dist/$bin"
+            tar -C dist -czf "dist/cvx-$os-$arch.tar.gz" "$bin" "$@"
+            rm "dist/$bin"
           }
-          build darwin-arm64 darwin arm64
-          build darwin-x64   darwin x64
-          build linux-x64    linux  x64
-          build linux-arm64  linux  arm64
+          build darwin-arm64 darwin arm64 cvx     cvx.1
+          build darwin-x64   darwin x64   cvx     cvx.1
+          build linux-x64    linux  x64   cvx     cvx.1
+          build linux-arm64  linux  arm64 cvx     cvx.1
+          build windows-x64  win32  x64   cvx.exe          # Windows (no man page)
           ( cd dist && shasum -a 256 *.tar.gz | tee checksums.txt )
 
       - name: Publish GitHub release

@@ -30,6 +30,7 @@ PLATFORMS=(
   "darwin x64"
   "linux x64"
   "linux arm64"
+  "win32 x64"
 )
 
 WORK=$(mktemp -d)
@@ -51,9 +52,10 @@ for entry in "${PLATFORMS[@]}"; do
   read -r os arch <<<"$entry"
   pkg="${NAME}-${os}-${arch}"          # e.g. @rafay99/cvx-darwin-arm64
   dir="$WORK/plat-${os}-${arch}"       # flat dir (pkg name has a '/')
+  bin="cvx"; [ "$os" = "win32" ] && bin="cvx.exe"
   mkdir -p "$dir/bin"
-  tar -xzf "$DIST/cvx-${os}-${arch}.tar.gz" -C "$dir/bin" cvx
-  chmod +x "$dir/bin/cvx"
+  tar -xzf "$DIST/cvx-${os}-${arch}.tar.gz" -C "$dir/bin" "$bin"
+  chmod +x "$dir/bin/${bin}"
   cat > "$dir/package.json" <<JSON
 {
   "name": "${pkg}",
@@ -63,7 +65,7 @@ for entry in "${PLATFORMS[@]}"; do
   "repository": "${REPO}",
   "os": ["${os}"],
   "cpu": ["${arch}"],
-  "files": ["bin/cvx"]
+  "files": ["bin/${bin}"]
 }
 JSON
   echo "→ publishing ${pkg}@${NPM_VERSION}"
@@ -75,28 +77,39 @@ main="$WORK/main"
 mkdir -p "$main"
 cp npm/launcher.js "$main/launcher.js"
 cp man/cvx.1 "$main/cvx.1"
+cp README.md "$main/README.md"   # shown on the npm package page
+cp LICENSE "$main/LICENSE"
 cat > "$main/package.json" <<JSON
 {
   "name": "${NAME}",
   "version": "${NPM_VERSION}",
-  "description": "Switch Convex accounts per project automatically — no deploy keys, no tokens in repos",
-  "keywords": ["convex", "cli", "accounts", "multi-account", "workspace"],
+  "description": "Switch Convex accounts per project automatically — run many Convex accounts across projects at once, no login/logout churn, no deploy keys, no tokens in your repos",
+  "keywords": [
+    "convex", "convex-dev", "convex-cli", "cli", "command-line",
+    "accounts", "account-switcher", "multi-account", "multi-tenant",
+    "auth", "login", "credentials", "workspace", "monorepo",
+    "developer-tools", "devtools", "terminal", "dotfiles", "bun",
+    "context-switch", "deploy"
+  ],
   "license": "MIT",
-  "homepage": "${REPO}",
-  "repository": "${REPO}",
+  "homepage": "${REPO}#readme",
+  "bugs": "${REPO}/issues",
+  "repository": { "type": "git", "url": "git+${REPO}.git" },
+  "author": "Abdul Rafay",
   "bin": { "cvx": "launcher.js" },
   "man": ["cvx.1"],
-  "files": ["launcher.js", "cvx.1"],
+  "files": ["launcher.js", "cvx.1", "README.md", "LICENSE"],
   "engines": { "node": ">=16" },
   "optionalDependencies": {
     "${NAME}-darwin-arm64": "${NPM_VERSION}",
     "${NAME}-darwin-x64": "${NPM_VERSION}",
     "${NAME}-linux-x64": "${NPM_VERSION}",
-    "${NAME}-linux-arm64": "${NPM_VERSION}"
+    "${NAME}-linux-arm64": "${NPM_VERSION}",
+    "${NAME}-win32-x64": "${NPM_VERSION}"
   }
 }
 JSON
 echo "→ publishing ${NAME}@${NPM_VERSION}"
 publish_if_new "$main" "$NAME"
 
-echo "::notice::Published ${NAME} ${NPM_VERSION} to npm (main + 4 platform packages)."
+echo "::notice::Published ${NAME} ${NPM_VERSION} to npm (main + 5 platform packages)."

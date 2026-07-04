@@ -14,10 +14,21 @@
   },
   "keywords": [
     "convex",
+    "convex-dev",
+    "convex-cli",
     "cli",
+    "command-line",
     "accounts",
+    "account-switcher",
     "multi-account",
-    "workspace"
+    "multi-tenant",
+    "auth",
+    "workspace",
+    "monorepo",
+    "developer-tools",
+    "devtools",
+    "terminal",
+    "bun"
   ],
   "license": "MIT"
 }

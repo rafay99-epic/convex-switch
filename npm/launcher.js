@@ -9,14 +9,15 @@
 const { spawnSync } = require("child_process");
 
 const target = `@rafay99/cvx-${process.platform}-${process.arch}`;
+const binName = process.platform === "win32" ? "cvx.exe" : "cvx";
 
 let binary;
 try {
-  binary = require.resolve(`${target}/bin/cvx`);
+  binary = require.resolve(`${target}/bin/${binName}`);
 } catch {
   console.error(
     `cvx: no prebuilt binary for ${process.platform}-${process.arch}.\n` +
-      `Supported: darwin-arm64, darwin-x64, linux-x64, linux-arm64.\n` +
+      `Supported: darwin-arm64, darwin-x64, linux-x64, linux-arm64, win32-x64.\n` +
       `If your platform is supported, reinstall without --no-optional.`,
   );
   process.exit(1);
