@@ -72,6 +72,11 @@ exec zsh
 > so it works under `bun add -g` and `--ignore-scripts` too. The command you
 > type is still `cvx`.
 
+Prebuilt binaries: **macOS** (arm64/x64), **Linux** (arm64/x64), **Windows**
+(x64). On Windows the commands all work, but automatic switching relies on a
+zsh `chpwd` hook — so for now run `cvx activate` when you switch projects (or
+use WSL/zsh for the auto-switch experience).
+
 **From source** (Bun):
 
 ```bash
