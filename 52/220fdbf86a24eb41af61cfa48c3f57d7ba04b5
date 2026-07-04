@@ -1,0 +1,23 @@
+src/migrate.ts
+  s_326bad0e8bda7f::t_68afc8243204bf 120
+  s_326bad0e8bda7f::t_7de8cdcf42eee4 82,85-92,95-96,107-111,115
+  s_326bad0e8bda7f::t_34ae2abaaadcd7 72,75-76,81
+README.md
+  s_326bad0e8bda7f::t_523041e075ce2d 188-193
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "52220fdbf86a24eb41af61cfa48c3f57d7ba04b5",
+  "prompts": {},
+  "sessions": {
+    "s_326bad0e8bda7f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c31b8df-1252-41be-801e-81f849ff95bd",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
