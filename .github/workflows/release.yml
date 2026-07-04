@@ -40,6 +40,11 @@ jobs:
       - name: Compute version
         run: echo "VERSION=0.$(git rev-list --count HEAD)" >> "$GITHUB_ENV"
 
+      - name: Stamp version into the binary
+        run: |
+          sed -i "s|export const VERSION = \"[^\"]*\";|export const VERSION = \"${VERSION}\";|" src/store.ts
+          grep -n 'export const VERSION' src/store.ts
+
       - name: Build binaries (all targets)
         run: |
           set -euo pipefail
