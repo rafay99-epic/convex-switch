@@ -10,9 +10,12 @@ on:
     branches: [main]
     paths:
       - "bin/**"
+      - "src/**"
+      - "man/**"
       - "package.json"
       - ".github/workflows/release.yml"
       - ".github/scripts/bump-formula.sh"
+      - ".github/scripts/publish-npm.sh"
   workflow_dispatch:
 
 permissions:
