@@ -36,7 +36,7 @@ import {
   deleteToken,
   readActive,
   writeActive,
-  activeTokenMatches,
+  activeMarkerMatches,
   clearActive,
   activeAccountName,
   projectDeployment,
@@ -90,6 +90,12 @@ export async function cmdAdd(args: string[]) {
   if (flags.token === true) die(`${bold("--token")} needs a value: ${bold("cvx add <name> --token <token>")}`);
   let token: string | null = (flags.token as string) ?? null;
 
+  // Validate a user-supplied NEW name before the network round-trip. Existing
+  // names are grandfathered so `cvx refresh`/`cvx login` keep working for
+  // accounts created before validation existed. Object.hasOwn (not
+  // accounts[name]) so "__proto__" can't sneak past via the prototype.
+  if (name && !Object.hasOwn(readAccounts(), name)) requireValidName(name);
+
   if (!token) {
     token = currentConvexToken();
     if (!token)
@@ -111,8 +117,10 @@ export async function cmdAdd(args: string[]) {
     die(String((e as Error).message));
   }
 
-  if (!name) name = teams[0]?.slug ?? "account";
-  requireValidName(name);
+  if (!name) {
+    const slug = teams[0]?.slug;
+    name = slug && validAccountName(slug) ? slug : "account";
+  }
   const accounts = readAccounts();
   if (accounts[name] && !flags.force)
     die(`Account ${bold(name)} already exists. Use ${bold("--force")} to overwrite.`);
@@ -204,8 +212,10 @@ export function cmdRename(args: string[]) {
   const flags = parseFlags(args);
   const [oldName, newName] = flags._;
   if (!oldName || !newName) die(`Usage: ${bold("cvx rename <old> <new>")}`);
-  requireValidName(newName);
   const accounts = readAccounts();
+  // New target names must be safe; overwriting an existing (legacy) name with
+  // --force is grandfathered, matching cmdAdd.
+  if (!Object.hasOwn(accounts, newName)) requireValidName(newName);
   const acc = requireAccount(accounts, oldName);
   if (oldName === newName) return console.log(dim("Same name — nothing to do."));
   if (accounts[newName] && !flags.force)
@@ -221,7 +231,7 @@ export function cmdRename(args: string[]) {
     movedToken = tok;
   } else {
     accounts[newName] = acc; // file/dpapi records travel with the object
-    movedToken = acc.token;
+    movedToken = acc.token; // inline token if file-backed; dpapi resolves lazily below
   }
   delete accounts[oldName];
   writeAccounts(accounts);
@@ -237,7 +247,10 @@ export function cmdRename(args: string[]) {
       moved++;
     }
   writeLinks(links);
-  if (readActive() === oldName) writeActive(newName, movedToken);
+  // DPAPI records keep their secret in `enc`, so decrypt via tokenOf — but
+  // only when the renamed account is the active one (it spawns PowerShell).
+  if (readActive() === oldName)
+    writeActive(newName, movedToken ?? tokenOf(newName, accounts[newName]) ?? undefined);
 
   console.log(
     `${green("✓")} Renamed ${bold(oldName)} → ${bold(newName)}${moved ? dim(` (${moved} link(s) updated)`) : ""}`,
@@ -293,12 +306,12 @@ export function cmdActivate(args: string[]) {
       return;
     }
     const expensive = !!acc.keychain || !!acc.enc; // reading the token spawns a process
-    if (expensive && readActive() === link.account) {
+    if (expensive) {
       // Trust the marker instead of a slow secret lookup — but only when its
       // token fingerprint still matches the global config, so an external
       // `npx convex login` can't leave the wrong account silently "active".
       const cur = currentConvexToken();
-      if (cur != null && activeTokenMatches(cur)) {
+      if (cur != null && activeMarkerMatches(link.account, cur)) {
         if (!quiet)
           console.log(`${green("●")} ${bold(link.account)} ${teamLabel(acc)} ${dim("(already active)")}`);
         return;
@@ -620,17 +633,27 @@ export async function cmdDoctor(args: string[] = []) {
 
   let accounts: Accounts = {};
   let nLink = 0;
-  let vaultOk = true;
+  let vaultOk = true; // accounts.json parses
+  let linksOk = true; // links.json parses (report separately — accounts may be fine)
   try {
     accounts = readAccounts();
-    nLink = Object.keys(readLinks()).length;
   } catch {
     vaultOk = false;
     healthy = false;
   }
+  try {
+    nLink = Object.keys(readLinks()).length;
+  } catch {
+    linksOk = false;
+    healthy = false;
+  }
   const nAcc = Object.keys(accounts).length;
   console.log(
-    `  ${mark(vaultOk)} vault             ${vaultOk ? dim(`${nAcc} account(s), ${nLink} link(s)  ·  ~/.convex-switch`) : red("corrupted — see ~/.convex-switch")}`,
+    `  ${mark(vaultOk && linksOk)} vault             ${
+      vaultOk && linksOk
+        ? dim(`${nAcc} account(s), ${nLink} link(s)  ·  ~/.convex-switch`)
+        : red(`${vaultOk ? "links.json" : "accounts.json"} corrupted — see ~/.convex-switch`)
+    }`,
   );
 
   const backend = storageBackend();

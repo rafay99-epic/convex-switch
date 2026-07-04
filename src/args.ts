@@ -19,8 +19,12 @@ export function parseFlags(args: string[]): { _: string[]; [k: string]: any } {
         out[a.slice(2, eq)] = a.slice(eq + 1);
       } else {
         const key = a.slice(2);
-        if (VALUE_FLAGS.has(key) && args[i + 1] !== undefined) {
-          out[key] = args[i + 1];
+        const next = args[i + 1];
+        // A value flag never eats something that looks like another flag —
+        // `cvx add x --token --force` must not read `--force` as the token.
+        // Values that DO start with a dash can be passed as `--token=-abc`.
+        if (VALUE_FLAGS.has(key) && next !== undefined && !next.startsWith("-")) {
+          out[key] = next;
           i++;
         } else {
           out[key] = true;

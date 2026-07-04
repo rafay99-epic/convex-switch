@@ -178,23 +178,27 @@ export function validAccountName(name: string): boolean {
 const tokenFingerprint = (token: string) =>
   createHash("sha256").update(token).digest("hex").slice(0, 16);
 
-export function readActive(): string | null {
+function readActiveLines(): string[] {
   try {
-    const name = readFileSync(ACTIVE_FILE, "utf8").split("\n")[0].trim();
-    return name || null;
+    return readFileSync(ACTIVE_FILE, "utf8").split("\n");
   } catch {
-    return null;
+    return [];
   }
 }
 
-/** True when the marker's fingerprint matches `token` (markers written without one never match). */
-export function activeTokenMatches(token: string): boolean {
-  try {
-    const fp = readFileSync(ACTIVE_FILE, "utf8").split("\n")[1]?.trim();
-    return !!fp && fp === tokenFingerprint(token);
-  } catch {
-    return false;
-  }
+export function readActive(): string | null {
+  const name = readActiveLines()[0]?.trim();
+  return name || null;
+}
+
+/**
+ * One read of the marker: is it `name`, with a fingerprint matching `token`?
+ * Markers written without a fingerprint (or in the old one-line format) never
+ * match, which safely forces the caller onto the slow verified path once.
+ */
+export function activeMarkerMatches(name: string, token: string): boolean {
+  const [n, fp] = readActiveLines();
+  return n?.trim() === name && !!fp?.trim() && fp.trim() === tokenFingerprint(token);
 }
 
 export function writeActive(name: string, token?: string) {
