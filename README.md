@@ -73,9 +73,10 @@ exec zsh
 > type is still `cvx`.
 
 Prebuilt binaries: **macOS** (arm64/x64), **Linux** (arm64/x64), **Windows**
-(x64). On Windows the commands all work, but automatic switching relies on a
-zsh `chpwd` hook — so for now run `cvx activate` when you switch projects (or
-use WSL/zsh for the auto-switch experience).
+(x64). Auto-switching works on **zsh, bash, and PowerShell** — `cvx hook
+--install` detects your shell (PowerShell on Windows) and wires the hook into
+the right startup file (`~/.zshrc`, `~/.bashrc`, or your PowerShell `$PROFILE`).
+Force one with `cvx hook --install --shell powershell`.
 
 **From source** (Bun):
 

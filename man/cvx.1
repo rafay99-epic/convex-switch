@@ -37,8 +37,10 @@ account may be linked to many projects.
 .B cvx unlink \fR[\fIpath\fR]
 Remove a link.
 .TP
-.B cvx hook \fR[\fB--install\fR]
-Print the zsh cd-hook, or with \fB--install\fR append it to \fI~/.zshrc\fR.
+.B cvx hook \fR[\fB--install\fR] [\fB--shell\fR \fIzsh\fR|\fIbash\fR|\fIpowershell\fR]
+Print the directory-change hook, or with \fB--install\fR wire it into the shell
+startup file (\fI~/.zshrc\fR, \fI~/.bashrc\fR, or the PowerShell \fB$PROFILE\fR).
+The shell is auto-detected when \fB--shell\fR is omitted (PowerShell on Windows).
 .SS Everyday
 .TP
 .B cvx activate \fR[\fB-q\fR] [\fIpath\fR]
