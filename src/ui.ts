@@ -5,18 +5,10 @@
 
 import { HOME, VERSION, VAULT } from "./store";
 import type { Account } from "./store";
+import { fg256, bold, dim, green, yellow, red, cyan, BANNER_GRADIENT } from "./colors";
 
-const useColor = process.stdout.isTTY && !process.env.NO_COLOR;
-export const c = (code: string, s: string) => (useColor ? `\x1b[${code}m${s}\x1b[0m` : s);
-
-export const bold = (s: string) => c("1", s);
-export const dim = (s: string) => c("2", s);
-export const green = (s: string) => c("32", s);
-export const yellow = (s: string) => c("33", s);
-export const red = (s: string) => c("31", s);
-export const cyan = (s: string) => c("36", s);
-/** 256-color foreground, for the banner gradient. */
-const g = (n: number, s: string) => c(`38;5;${n}`, s);
+// Re-export the palette so the rest of the app can import colors from "./ui".
+export { c, bold, dim, green, yellow, red, cyan, blue, magenta, fg256 } from "./colors";
 
 export function die(msg: string): never {
   console.error(red("✗ ") + msg);
@@ -44,11 +36,8 @@ const LOGO = [
   "╚██████╗ ╚████╔╝ ██╔╝ ██╗",
   " ╚═════╝  ╚═══╝  ╚═╝  ╚═╝ ",
 ];
-// cyan → blue gradient, top to bottom
-const SHADES = [51, 45, 39, 33, 27, 26];
-
 export function banner(): string {
-  const art = LOGO.map((line, i) => "  " + g(SHADES[i], line)).join("\n");
+  const art = LOGO.map((line, i) => "  " + fg256(BANNER_GRADIENT[i], line)).join("\n");
   return `\n${art}\n  ${dim("convex-switch")} ${dim("v" + VERSION)} ${dim(
     "· one terminal, every Convex account",
   )}\n`;

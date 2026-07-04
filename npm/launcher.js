@@ -1,0 +1,30 @@
+#!/usr/bin/env node
+"use strict";
+/**
+ * Launcher for the `convex-switch` npm package. The actual `cvx` binary is
+ * shipped inside a per-platform package (convex-switch-<os>-<arch>) selected by
+ * npm/bun/pnpm via `os`/`cpu`. This shim resolves that binary and execs it —
+ * no postinstall, so it works even under `bun add -g` and `--ignore-scripts`.
+ */
+const { spawnSync } = require("child_process");
+
+const target = `convex-switch-${process.platform}-${process.arch}`;
+
+let binary;
+try {
+  binary = require.resolve(`${target}/bin/cvx`);
+} catch {
+  console.error(
+    `convex-switch: no prebuilt binary for ${process.platform}-${process.arch}.\n` +
+      `Supported: darwin-arm64, darwin-x64, linux-x64, linux-arm64.\n` +
+      `If your platform is supported, reinstall without --no-optional.`,
+  );
+  process.exit(1);
+}
+
+const res = spawnSync(binary, process.argv.slice(2), { stdio: "inherit" });
+if (res.error) {
+  console.error(res.error.message);
+  process.exit(1);
+}
+process.exit(res.status === null ? 1 : res.status);

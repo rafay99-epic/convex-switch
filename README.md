@@ -57,6 +57,20 @@ cvx hook --install   # adds the cd-hook to ~/.zshrc (once)
 exec zsh             # reload your shell
 ```
 
+**npm / bun / pnpm** — installs the same prebuilt binary:
+
+```bash
+npm install -g convex-switch     # or: bun add -g convex-switch
+pnpm add -g convex-switch        # or: pnpm
+cvx hook --install
+exec zsh
+```
+
+> Distributed the esbuild way: per-platform packages
+> (`convex-switch-<os>-<arch>`) carry the binary, gated by `os`/`cpu`, and a
+> tiny launcher in the main package execs it. No postinstall — so it works
+> under `bun add -g` and `--ignore-scripts` too.
+
 **From source** (Bun):
 
 ```bash
