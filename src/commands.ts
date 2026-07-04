@@ -1,10 +1,11 @@
 /** commands — one function per subcommand. Glue between store + ui. */
 
-import { existsSync, readFileSync, appendFileSync, mkdirSync } from "node:fs";
+import { existsSync, statSync, readFileSync, appendFileSync, mkdirSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { spawnSync } from "node:child_process";
 
 import { type Shell, hookFor, detectShell } from "./hooks";
+import { hasCommand, isWindows } from "./system";
 
 import {
   HOME,
@@ -65,11 +66,21 @@ export function cmdLogin(args: string[]) {
   const flags = parseFlags(args);
   const name = flags._[0];
   if (!name) die(`Usage: ${bold("cvx login <name>")}`);
+  if (!hasCommand("npx"))
+    die(
+      `${bold("npx")} (Node.js) was not found on your PATH.\n` +
+        `  Convex's CLI runs via npx — install Node from https://nodejs.org and retry.\n` +
+        `  Already logged in elsewhere? Use ${bold(`cvx add ${name}`)} to store the current login.`,
+    );
   // --force bypasses convex's "this device is already authorized" short-circuit,
   // so it actually opens the browser to sign into a *different* account.
   console.log(dim("Opening Convex login (forces a fresh browser sign-in)…"));
-  const r = spawnSync("npx", ["--yes", "convex", "login", "--force"], { stdio: "inherit" });
-  if (r.status !== 0) die("convex login did not complete");
+  const r = spawnSync("npx", ["--yes", "convex", "login", "--force"], {
+    stdio: "inherit",
+    shell: isWindows, // resolve npx.cmd on Windows
+  });
+  if (r.error) die(`Could not run convex login: ${r.error.message}`);
+  if (r.status !== 0) die("convex login did not complete.");
   // Snapshot whatever token convex just wrote for the account you signed into.
   return cmdAdd([name, "--force"]);
 }
@@ -82,9 +93,10 @@ export function cmdLink(args: string[]) {
   if (!accounts[account])
     die(`Unknown account ${bold(account)}. Known: ${Object.keys(accounts).join(", ") || "(none)"}`);
 
-  if (!existsSync(resolve(flags._[1] ?? process.cwd())))
-    die(`Path does not exist: ${flags._[1] ?? process.cwd()}`);
-  const target = canon(flags._[1] ?? process.cwd());
+  const input = flags._[1] ?? process.cwd();
+  if (!existsSync(resolve(input))) die(`Path does not exist: ${input}`);
+  if (!statSync(resolve(input)).isDirectory()) die(`Not a directory: ${input}`);
+  const target = canon(input);
 
   const links = readLinks();
   links[target] = account;
@@ -132,25 +144,33 @@ export function cmdRm(args: string[]) {
 export function cmdActivate(args: string[]) {
   const flags = parseFlags(args);
   const quiet = flags.q || flags.quiet;
-  const link = resolveLink(flags._[0] ?? process.cwd());
-  if (!link) {
-    if (!quiet) console.log(dim("No account linked to this directory."));
-    return;
+  // The shell hook calls this on every cd — it must NEVER throw and break the
+  // prompt. Any failure (corrupt vault, unreadable config, fs error) is
+  // swallowed in quiet mode; surfaced briefly otherwise.
+  try {
+    const link = resolveLink(flags._[0] ?? process.cwd());
+    if (!link) {
+      if (!quiet) console.log(dim("No account linked to this directory."));
+      return;
+    }
+    const accounts = readAccounts();
+    const acc = accounts[link.account];
+    if (!acc) {
+      if (!quiet) console.log(yellow(`Linked to unknown account "${link.account}".`));
+      return;
+    }
+    if (currentConvexToken() === acc.token) {
+      if (!quiet)
+        console.log(`${green("●")} ${bold(link.account)} ${teamLabel(acc)} ${dim("(already active)")}`);
+      return; // already correct — no write, no noise
+    }
+    setConvexToken(acc.token);
+    // Print a concise switch notice even in quiet/hook mode so you see it on cd.
+    console.log(`${cyan("⇄")} convex account → ${bold(link.account)} ${teamLabel(acc)}`);
+  } catch (e) {
+    if (!quiet) console.error(red("cvx: ") + (e as Error).message);
+    // quiet (hook) mode: stay silent so the shell prompt is never disturbed
   }
-  const accounts = readAccounts();
-  const acc = accounts[link.account];
-  if (!acc) {
-    if (!quiet) console.log(yellow(`Linked to unknown account "${link.account}".`));
-    return;
-  }
-  if (currentConvexToken() === acc.token) {
-    if (!quiet)
-      console.log(`${green("●")} ${bold(link.account)} ${teamLabel(acc)} ${dim("(already active)")}`);
-    return; // already correct — no write, no noise
-  }
-  setConvexToken(acc.token);
-  // Print a concise switch notice even in quiet/hook mode so you see it on cd.
-  console.log(`${cyan("⇄")} convex account → ${bold(link.account)} ${teamLabel(acc)}`);
 }
 
 export function cmdStatus() {
@@ -211,6 +231,71 @@ export function cmdWhich(args: string[]) {
 
 export function cmdVersion() {
   console.log(VERSION);
+}
+
+/** Environment/health check: Node/npx, Convex login, vault, hook. */
+export function cmdDoctor() {
+  const mark = (b: boolean) => (b ? green("✓") : red("✗"));
+  const warn = (b: boolean) => (b ? green("✓") : yellow("!"));
+  let healthy = true;
+  console.log(bold("cvx doctor") + "\n");
+
+  // Node/npx — needed for `cvx login` (Convex's CLI runs via npx).
+  const npx = hasCommand("npx");
+  if (!npx) healthy = false;
+  console.log(
+    `  ${mark(npx)} node / npx        ${
+      npx ? dim("available") : yellow("missing — needed for `cvx login`; install Node")
+    }`,
+  );
+
+  // Has the user ever logged into Convex on this machine?
+  const tok = currentConvexToken();
+  console.log(
+    `  ${warn(!!tok)} convex login      ${
+      tok ? dim("~/.convex/config.json present") : yellow("none yet — run `cvx login <name>`")
+    }`,
+  );
+
+  // Vault integrity.
+  let vaultOk = true;
+  let nAcc = 0;
+  let nLink = 0;
+  let accounts: Record<string, { token: string }> = {};
+  try {
+    accounts = readAccounts();
+    nAcc = Object.keys(accounts).length;
+    nLink = Object.keys(readLinks()).length;
+  } catch (e) {
+    vaultOk = false;
+    healthy = false;
+  }
+  console.log(
+    `  ${mark(vaultOk)} vault             ${
+      vaultOk
+        ? dim(`${nAcc} account(s), ${nLink} link(s)  ·  ~/.convex-switch`)
+        : red("corrupted — see ~/.convex-switch")
+    }`,
+  );
+
+  // Active account for this shell/dir.
+  const active = vaultOk ? Object.entries(accounts).find(([, a]) => a.token === tok) : null;
+  console.log(
+    `  ${warn(!!active)} active account    ${active ? dim(active[0]) : dim("none active")}`,
+  );
+
+  // Shell hook installed?
+  const rcs = [".zshrc", ".bashrc"].map((f) => join(HOME, f));
+  const hooked = rcs.some((rc) => existsSync(rc) && readFileSync(rc, "utf8").includes("convex-switch"));
+  console.log(
+    `  ${warn(hooked)} shell hook        ${
+      hooked ? dim("installed") : yellow("not installed — run `cvx hook --install`")
+    }`,
+  );
+
+  console.log();
+  console.log(healthy ? green("Everything looks good.") : yellow("Some checks need attention (see above)."));
+  if (!healthy) process.exitCode = 1;
 }
 
 export function cmdHook(args: string[]) {

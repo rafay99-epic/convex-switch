@@ -64,6 +64,12 @@ Print the account name for a directory (exit 1 if none). For scripting.
 .B cvx rm \fIaccount\fR
 Forget an account and any links pointing at it.
 .TP
+.B cvx doctor
+Check your setup and report problems: Node/npx availability (needed for
+\fBcvx login\fR), whether you have a Convex login, vault integrity, the active
+account, and whether the shell hook is installed. Exits non-zero if something
+needs attention.
+.TP
 .B cvx welcome
 Show the welcome screen again.
 .TP
