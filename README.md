@@ -123,6 +123,23 @@ bun run dev             # runs as work — both live simultaneously
 | `cvx rm <account>` | Forget an account and its links |
 | `cvx hook [--install]` | Print (or install) the zsh cd-hook |
 
+## Project layout
+
+The CLI is split into small modules; `bun build --compile` bundles them all into
+a single binary, so the split costs nothing at build time.
+
+```
+bin/cvx.ts        entry point + command dispatch
+src/store.ts      data layer: vault I/O, the config swap, token verify, paths
+src/ui.ts         colors, the logo banner, first-run welcome, help
+src/commands.ts   one function per subcommand
+src/args.ts       flag parsing
+man/cvx.1         man page (installed by Homebrew → `man cvx`)
+```
+
+First run of a bare `cvx` shows a welcome screen; `cvx welcome` shows it again,
+and `man cvx` opens the manual.
+
 ## Releasing
 
 Pushing to `main` (touching `bin/**` or `package.json`) triggers

@@ -41,11 +41,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
+          cp man/cvx.1 dist/cvx.1   # shipped in every tarball for `man cvx`
           build() { # <bun-target> <os> <arch>
             echo "→ building $2-$3"
             bun build ./bin/cvx.ts --compile --minify --target="bun-$1" --outfile dist/cvx
             chmod +x dist/cvx
-            tar -C dist -czf "dist/cvx-$2-$3.tar.gz" cvx
+            tar -C dist -czf "dist/cvx-$2-$3.tar.gz" cvx cvx.1
             rm dist/cvx
           }
           build darwin-arm64 darwin arm64
