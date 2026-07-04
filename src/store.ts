@@ -39,6 +39,10 @@ export const CONVEX_CONFIG = join(HOME, ".convex", "config.json");
 export const API_TEAMS = "https://api.convex.dev/api/teams";
 export const CLIENT = `convex-switch/${VERSION}`;
 
+// Vault schema version. Bump when the on-disk format changes; a legacy vault
+// (no schemaVersion, or a lower one) triggers the one-time migration prompt.
+export const SCHEMA = 2;
+
 // --- Types ------------------------------------------------------------------
 
 export type Team = { slug: string; name: string };
@@ -56,17 +60,23 @@ export type Account = {
 };
 export type Accounts = Record<string, Account>;
 export type Links = Record<string, string>; // absolute project path -> account name
-export type Config = { storage?: Backend };
+export type Config = { storage?: Backend; schemaVersion?: number };
 
 // --- Vault I/O (dir 700, files 600) -----------------------------------------
 
 export function ensureVault() {
+  // A brand-new vault (no accounts file yet) is born at the current schema, so
+  // fresh installs never see the migration prompt. A vault that already has an
+  // accounts file but no schemaVersion is a LEGACY vault — left untouched here
+  // so maybeMigrate() can prompt the user before upgrading it.
+  const fresh = !existsSync(ACCOUNTS_FILE);
   if (!existsSync(VAULT)) mkdirSync(VAULT, { recursive: true, mode: 0o700 });
   try {
     chmodSync(VAULT, 0o700);
   } catch {}
   if (!existsSync(ACCOUNTS_FILE)) writeJSON(ACCOUNTS_FILE, {});
   if (!existsSync(LINKS_FILE)) writeJSON(LINKS_FILE, {});
+  if (fresh && !existsSync(CONFIG_FILE)) writeJSON(CONFIG_FILE, { schemaVersion: SCHEMA });
 }
 
 /** Lenient read (used for Convex's own config): any problem → fallback. */

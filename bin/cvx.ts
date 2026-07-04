@@ -9,6 +9,7 @@
  */
 
 import { ensureVault, isFirstRun, markWelcomed } from "../src/store";
+import { maybeMigrate, MIGRATION_EXEMPT } from "../src/migrate";
 import { die, help, welcome, bold } from "../src/ui";
 import {
   cmdAdd,
@@ -37,6 +38,14 @@ import {
 async function main() {
   ensureVault();
   const [cmd, ...rest] = process.argv.slice(2);
+
+  // One-time, mandatory vault upgrade for users coming from an older version.
+  // Skipped for hot/scripted commands (the cd-hook, completion, prompt, …) and
+  // for `accounts --names` (used by completion scripts) so they never block.
+  if (!MIGRATION_EXEMPT.has(cmd) && !(cmd === "accounts" && rest.includes("--names"))) {
+    await maybeMigrate();
+  }
+
   switch (cmd) {
     case "add":
       return cmdAdd(rest);

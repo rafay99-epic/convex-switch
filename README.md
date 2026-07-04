@@ -181,6 +181,16 @@ cvx completions zsh >> ~/.zshrc         # tab-complete commands + account names
 # [custom.cvx]  command = "cvx prompt"  when = "true"  format = "[($output )]($style)"
 ```
 
+## Upgrading from an older version
+
+The vault is schema-versioned. The first time you run an interactive `cvx`
+command after updating from an older release, cvx shows a one-time prompt and,
+on confirmation, re-secures your tokens in the best available backend (OS
+keychain if present, otherwise the chmod-600 file vault) and upgrades the vault
+format. It's mandatory and runs once — you never see it again. The cd-hook and
+scripts keep working throughout; the prompt only appears in an interactive
+terminal.
+
 ## Project layout
 
 The CLI is split into small modules; `bun build --compile` bundles them all into
