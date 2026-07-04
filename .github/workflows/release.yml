@@ -1,0 +1,77 @@
+name: Release
+
+# Build standalone `cvx` binaries for macOS + Linux, publish a GitHub release,
+# and bump the Homebrew formula in rafay99-epic/homebrew-apps — no sha256 is
+# ever hand-edited. Mirrors the Vitals release flow, adapted for a CLI:
+# Bun cross-compiles every target from one Linux runner.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "bin/**"
+      - "package.json"
+      - ".github/workflows/release.yml"
+      - ".github/scripts/bump-formula.sh"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history so the commit count = version
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Compute version
+        run: echo "VERSION=0.$(git rev-list --count HEAD)" >> "$GITHUB_ENV"
+
+      - name: Build binaries (all targets)
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          build() { # <bun-target> <os> <arch>
+            echo "→ building $2-$3"
+            bun build ./bin/cvx.ts --compile --minify --target="bun-$1" --outfile dist/cvx
+            chmod +x dist/cvx
+            tar -C dist -czf "dist/cvx-$2-$3.tar.gz" cvx
+            rm dist/cvx
+          }
+          build darwin-arm64 darwin arm64
+          build darwin-x64   darwin x64
+          build linux-x64    linux  x64
+          build linux-arm64  linux  arm64
+          ( cd dist && shasum -a 256 *.tar.gz | tee checksums.txt )
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            gh release upload "v$VERSION" dist/*.tar.gz dist/checksums.txt --clobber
+          else
+            gh release create "v$VERSION" dist/*.tar.gz dist/checksums.txt \
+              --title "v$VERSION" --generate-notes
+          fi
+
+      - name: Bump Homebrew formula
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+        run: |
+          if [ -z "${TAP_TOKEN:-}" ]; then
+            echo "::warning::TAP_TOKEN not set — skipping formula bump. Add a fine-grained PAT with Contents: Read & Write on rafay99-epic/homebrew-apps as the TAP_TOKEN secret to automate it."
+            exit 0
+          fi
+          bash .github/scripts/bump-formula.sh
