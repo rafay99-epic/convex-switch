@@ -49,10 +49,20 @@ running — that's what makes true simultaneous multi-account work.
 
 ## Install
 
+**Homebrew** (macOS + Linux):
+
 ```bash
-bun link            # from this repo — exposes `cvx` globally
-cvx hook --install  # adds the cd-hook to ~/.zshrc (once)
-exec zsh            # reload your shell
+brew install rafay99-epic/apps/cvx
+cvx hook --install   # adds the cd-hook to ~/.zshrc (once)
+exec zsh             # reload your shell
+```
+
+**From source** (Bun):
+
+```bash
+bun link             # from this repo — exposes `cvx` globally
+cvx hook --install
+exec zsh
 ```
 
 ## Set up your accounts (once each)
@@ -112,6 +122,22 @@ bun run dev             # runs as work — both live simultaneously
 | `cvx which [path]` | Print the account name for a dir (scripting) |
 | `cvx rm <account>` | Forget an account and its links |
 | `cvx hook [--install]` | Print (or install) the zsh cd-hook |
+
+## Releasing
+
+Pushing to `main` (touching `bin/**` or `package.json`) triggers
+`.github/workflows/release.yml`, which:
+
+1. cross-compiles standalone `cvx` binaries for macOS (arm64/x64) and Linux
+   (arm64/x64) with `bun build --compile` on a single runner,
+2. publishes a GitHub release `v0.<commit-count>` with the tarballs +
+   `checksums.txt`, and
+3. regenerates the Homebrew formula (all four sha256s) and pushes it to the
+   `rafay99-epic/homebrew-apps` tap — no checksum is ever hand-edited.
+
+Step 3 needs a `TAP_TOKEN` repo secret (a fine-grained PAT with
+**Contents: Read & Write** on `rafay99-epic/homebrew-apps`); without it the
+release still builds and publishes, only the formula bump is skipped.
 
 ## Notes
 

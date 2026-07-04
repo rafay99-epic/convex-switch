@@ -99,14 +99,16 @@ cd "$WORK"
 mkdir -p Formula
 printf '%s\n' "$FORMULA" > Formula/cvx.rb
 
-if git diff --quiet -- Formula/cvx.rb; then
+# Stage first, then check the staged diff — `git diff` alone ignores a brand-new
+# untracked file, which would silently skip the very first publish.
+git add Formula/cvx.rb
+if git diff --cached --quiet -- Formula/cvx.rb; then
   echo "::notice::cvx formula already at ${VERSION} — nothing to push."
   exit 0
 fi
 
 git config user.name "github-actions[bot]"
 git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-git add Formula/cvx.rb
 git commit --quiet -m "cvx ${VERSION}"
 
 # Push to the tap's main, re-syncing if a sibling repo pushed first.
