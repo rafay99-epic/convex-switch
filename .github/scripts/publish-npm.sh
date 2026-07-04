@@ -75,7 +75,7 @@ done
 # --- main package: launcher + optionalDependencies --------------------------
 main="$WORK/main"
 mkdir -p "$main"
-cp npm/launcher.js "$main/launcher.js"
+cp npm/launcher.cjs "$main/launcher.cjs"
 cp man/cvx.1 "$main/cvx.1"
 cp README.md "$main/README.md"   # shown on the npm package page
 cp LICENSE "$main/LICENSE"
@@ -96,9 +96,9 @@ cat > "$main/package.json" <<JSON
   "bugs": "${REPO}/issues",
   "repository": { "type": "git", "url": "git+${REPO}.git" },
   "author": "Abdul Rafay",
-  "bin": { "cvx": "launcher.js" },
+  "bin": { "cvx": "launcher.cjs" },
   "man": ["cvx.1"],
-  "files": ["launcher.js", "cvx.1", "README.md", "LICENSE"],
+  "files": ["launcher.cjs", "cvx.1", "README.md", "LICENSE"],
   "engines": { "node": ">=16" },
   "optionalDependencies": {
     "${NAME}-darwin-arm64": "${NPM_VERSION}",

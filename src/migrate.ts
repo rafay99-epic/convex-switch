@@ -1,9 +1,9 @@
 /**
  * migrate — a one-time, mandatory, prompt-gated vault upgrade for users coming
  * from an older version. On the first *interactive* command against a legacy
- * vault, the user is shown a mandatory prompt; pressing Enter re-secures every
- * token in the best available backend, upgrades the on-disk format, stamps the
- * schema version, and the prompt never appears again.
+ * vault, the user is shown a mandatory prompt; pressing Enter rewrites legacy
+ * records into the current on-disk format, stamps the schema version, and the
+ * prompt never appears again.
  *
  * Non-interactive callers (the cd-hook `cvx activate -q`, scripts, completion)
  * are NOT prompted — legacy records still resolve, so they keep working, and
@@ -22,6 +22,8 @@ import {
   writeAccounts,
   tokenOf,
   makeTokenRecord,
+  withTokenRecord,
+  currentConvexToken,
   activeAccountName,
   writeActive,
 } from "./store";
@@ -42,10 +44,6 @@ export const MIGRATION_EXEMPT = new Set<string | undefined>([
   "completion",
 ]);
 
-export function migrationNeeded(): boolean {
-  return (readConfig().schemaVersion ?? 1) < SCHEMA;
-}
-
 /**
  * Prompt-and-migrate if the vault is legacy. Returns after the vault is current
  * (or after deferring in a non-interactive context). Throws only on a genuine
@@ -56,10 +54,9 @@ export async function maybeMigrate() {
   if ((cfg.schemaVersion ?? 1) >= SCHEMA) return; // already current
 
   const accounts = readAccounts(); // throws on a corrupt vault → handled upstream
-  const names = Object.keys(accounts);
 
   // Nothing to secure — stamp the version and move on, no prompt.
-  if (!names.length) {
+  if (!Object.keys(accounts).length) {
     writeConfig({ ...cfg, schemaVersion: SCHEMA });
     return;
   }
@@ -79,42 +76,42 @@ export async function maybeMigrate() {
   }
 
   process.stdout.write(dim("  Migrating… "));
-  runMigration(accounts, cfg);
+  // Re-read the vault: another cvx command may have changed it while the
+  // prompt sat open, and migrating a stale snapshot would discard its work.
+  runMigration(readAccounts(), readConfig());
 }
 
 /**
- * Re-secure every token into the encrypted FILE vault (chmod 600) and stamp the
- * schema. The migration deliberately does NOT touch the OS keychain: a keychain
- * write can pop a blocking system dialog (locked keychain, SSH, headless) and
- * this is a mandatory step every user hits. Keychain remains an explicit,
- * user-initiated opt-in via `cvx keychain enable`.
+ * Rewrite legacy inline-token records into the current file-vault shape
+ * (chmod 600) and stamp the schema. Keychain/DPAPI-backed records are already
+ * in the current shape and keep their secrets where they are — migration never
+ * copies a keychain secret into the plaintext file, and never writes TO the
+ * OS keychain either (a keychain write can pop a blocking system dialog, and
+ * this is a mandatory step every user hits). Keychain remains an explicit
+ * opt-in via `cvx keychain enable`.
  */
 function runMigration(accounts: Accounts, cfg: Config) {
-  const names = Object.keys(accounts);
-
-  // Read every token up front (legacy inline tokens resolve via tokenOf).
-  // Abort cleanly before touching anything if one can't be read.
-  const tokens: Record<string, string> = {};
-  for (const n of names) {
-    const t = tokenOf(n, accounts[n]);
+  const next: Accounts = {};
+  for (const [n, acc] of Object.entries(accounts)) {
+    if (acc.keychain || acc.enc) {
+      next[n] = acc;
+      continue;
+    }
+    // Read the legacy inline token; abort cleanly before touching anything if
+    // it can't be resolved.
+    const t = tokenOf(n, acc);
     if (t == null) {
       console.log(red("failed"));
       throw new Error(`couldn't read the stored token for "${n}" — nothing was changed.`);
     }
-    tokens[n] = t;
-  }
-
-  // Rewrite records in the file vault (makeTokenRecord("file", …) can't fail).
-  const next: Accounts = {};
-  for (const n of names) {
-    const rec = makeTokenRecord("file", n, tokens[n]);
-    next[n] = { teams: accounts[n].teams, addedAt: accounts[n].addedAt, ...rec };
+    next[n] = withTokenRecord(acc, makeTokenRecord("file", n, t));
   }
 
   writeAccounts(next);
-  writeConfig({ ...cfg, storage: "file", schemaVersion: SCHEMA });
+  writeConfig({ ...cfg, storage: cfg.storage ?? "file", schemaVersion: SCHEMA });
+  const cur = currentConvexToken();
   const active = activeAccountName(next);
-  if (active) writeActive(active);
+  if (active && cur) writeActive(active, cur);
 
   console.log(green("done"));
   console.log(`${green("✓")} ${bold("You're good to go.")}`);

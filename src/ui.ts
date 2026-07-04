@@ -3,22 +3,16 @@
  * welcome, and the help screen. Pure presentation, no fs/network.
  */
 
-import { HOME, VERSION, VAULT } from "./store";
+import { VERSION, VAULT, shortPath } from "./store";
 import type { Account } from "./store";
 import { fg256, bold, dim, green, yellow, red, cyan, BANNER_GRADIENT } from "./colors";
 
 // Re-export the palette so the rest of the app can import colors from "./ui".
-export { c, bold, dim, green, yellow, red, cyan, blue, magenta, fg256 } from "./colors";
+export { bold, dim, green, yellow, red, cyan } from "./colors";
 
 export function die(msg: string): never {
   console.error(red("✗ ") + msg);
   process.exit(1);
-}
-
-export function mask(token: string): string {
-  return token.length <= 10
-    ? "•".repeat(token.length)
-    : token.slice(0, 6) + "…" + token.slice(-4);
 }
 
 export function teamLabel(acc: Account): string {
@@ -98,10 +92,6 @@ ${bold("Manage")}
   cvx doctor                    check setup + token health
   cvx welcome · version         the welcome screen · the version
 
-Vault: ${cyan(shortVault())}  ${dim("(chmod 600, never in your projects)")}
+Vault: ${cyan(shortPath(VAULT))}  ${dim("(chmod 600, never in your projects)")}
 `);
-}
-
-function shortVault() {
-  return VAULT.startsWith(HOME) ? "~" + VAULT.slice(HOME.length) : VAULT;
 }

@@ -28,4 +28,6 @@ if (res.error) {
   console.error(res.error.message);
   process.exit(1);
 }
+// Propagate a signal death (Ctrl-C etc.) as a signal, not a generic failure.
+if (res.signal) process.kill(process.pid, res.signal);
 process.exit(res.status === null ? 1 : res.status);

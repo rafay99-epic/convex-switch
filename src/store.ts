@@ -5,11 +5,13 @@
  */
 
 import { homedir } from "node:os";
+import { createHash } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
   readFileSync,
   writeFileSync,
+  renameSync,
   chmodSync,
   realpathSync,
 } from "node:fs";
@@ -30,14 +32,14 @@ export const VERSION = "0.0.0-dev";
 
 export const HOME = homedir();
 export const VAULT = join(HOME, ".convex-switch");
-export const ACCOUNTS_FILE = join(VAULT, "accounts.json");
-export const LINKS_FILE = join(VAULT, "links.json");
-export const CONFIG_FILE = join(VAULT, "config.json");
-export const ACTIVE_FILE = join(VAULT, "active");
-export const WELCOME_MARKER = join(VAULT, ".welcomed");
-export const CONVEX_CONFIG = join(HOME, ".convex", "config.json");
-export const API_TEAMS = "https://api.convex.dev/api/teams";
-export const CLIENT = `convex-switch/${VERSION}`;
+const ACCOUNTS_FILE = join(VAULT, "accounts.json");
+const LINKS_FILE = join(VAULT, "links.json");
+const CONFIG_FILE = join(VAULT, "config.json");
+const ACTIVE_FILE = join(VAULT, "active");
+const WELCOME_MARKER = join(VAULT, ".welcomed");
+const CONVEX_CONFIG = join(HOME, ".convex", "config.json");
+const API_TEAMS = "https://api.convex.dev/api/teams";
+const CLIENT = `convex-switch/${VERSION}`;
 
 // Vault schema version. Bump when the on-disk format changes; a legacy vault
 // (no schemaVersion, or a lower one) triggers the one-time migration prompt.
@@ -80,7 +82,7 @@ export function ensureVault() {
 }
 
 /** Lenient read (used for Convex's own config): any problem → fallback. */
-export function readJSON<T>(file: string, fallback: T): T {
+function readJSON<T>(file: string, fallback: T): T {
   try {
     return JSON.parse(readFileSync(file, "utf8")) as T;
   } catch {
@@ -93,7 +95,7 @@ export function readJSON<T>(file: string, fallback: T): T {
  * but a present-yet-unparseable file THROWS rather than silently resetting —
  * otherwise the next write would clobber a recoverable file and lose accounts.
  */
-export function readVaultJSON<T>(file: string, fallback: T): T {
+function readVaultJSON<T>(file: string, fallback: T): T {
   if (!existsSync(file)) return fallback;
   const raw = readFileSync(file, "utf8");
   if (raw.trim() === "") return fallback;
@@ -106,11 +108,22 @@ export function readVaultJSON<T>(file: string, fallback: T): T {
   }
 }
 
-export function writeJSON(file: string, data: unknown) {
-  writeFileSync(file, JSON.stringify(data, null, 2) + "\n", { mode: 0o600 });
+/**
+ * Atomic write (temp file + rename): a crash mid-write can never leave a
+ * truncated file behind — that matters because readVaultJSON treats a torn
+ * vault file as fatal, and a torn ~/.convex/config.json would log the user out.
+ */
+function writeFileAtomic(file: string, contents: string) {
+  const tmp = `${file}.${process.pid}.tmp`;
+  writeFileSync(tmp, contents, { mode: 0o600 });
+  renameSync(tmp, file);
   try {
     chmodSync(file, 0o600);
   } catch {}
+}
+
+function writeJSON(file: string, data: unknown) {
+  writeFileAtomic(file, JSON.stringify(data, null, 2) + "\n");
 }
 
 export const readAccounts = () => readVaultJSON<Accounts>(ACCOUNTS_FILE, {});
@@ -140,22 +153,54 @@ export function makeTokenRecord(backend: Backend, name: string, token: string) {
   return storeToken(backend, name, token);
 }
 
+/** Rebuild an account around a new token record, preserving its metadata. */
+export function withTokenRecord(acc: Account, rec: ReturnType<typeof storeToken>): Account {
+  return { teams: acc.teams, addedAt: acc.addedAt, ...rec };
+}
+
+/**
+ * Account names become JSON keys, OS-keychain entries, and shell-completion
+ * output — restrict them to a safe charset. Requiring an alphanumeric first
+ * character also blocks `__proto__` (which JSON.parse-derived objects silently
+ * refuse to store as an own key, losing the account).
+ */
+export function validAccountName(name: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(name);
+}
+
 // --- Active-account marker --------------------------------------------------
-// A fast, name-only record of which account the global config currently holds,
-// so the cd-hook can no-op without reading (and, with keychain, without a slow
-// secret lookup) when the linked account is already active.
+// A fast record of which account the global config currently holds: line 1 is
+// the account name, line 2 a fingerprint of its token. The cd-hook uses it to
+// no-op without a slow keychain lookup — the fingerprint lets it detect that
+// something else (e.g. `npx convex login`) replaced the global token, so a
+// stale marker can never keep the wrong account silently "active".
+
+const tokenFingerprint = (token: string) =>
+  createHash("sha256").update(token).digest("hex").slice(0, 16);
 
 export function readActive(): string | null {
   try {
-    const v = readFileSync(ACTIVE_FILE, "utf8").trim();
-    return v || null;
+    const name = readFileSync(ACTIVE_FILE, "utf8").split("\n")[0].trim();
+    return name || null;
   } catch {
     return null;
   }
 }
-export function writeActive(name: string) {
+
+/** True when the marker's fingerprint matches `token` (markers written without one never match). */
+export function activeTokenMatches(token: string): boolean {
   try {
-    writeFileSync(ACTIVE_FILE, name + "\n", { mode: 0o600 });
+    const fp = readFileSync(ACTIVE_FILE, "utf8").split("\n")[1]?.trim();
+    return !!fp && fp === tokenFingerprint(token);
+  } catch {
+    return false;
+  }
+}
+
+export function writeActive(name: string, token?: string) {
+  try {
+    const fp = token ? tokenFingerprint(token) + "\n" : "";
+    writeFileSync(ACTIVE_FILE, name + "\n" + fp, { mode: 0o600 });
   } catch {}
 }
 export function clearActive() {
@@ -167,11 +212,8 @@ export function clearActive() {
 // --- Convex global config (the single account switch) -----------------------
 
 export function currentConvexToken(): string | null {
-  try {
-    return JSON.parse(readFileSync(CONVEX_CONFIG, "utf8")).accessToken ?? null;
-  } catch {
-    return null;
-  }
+  const token = readJSON<{ accessToken?: unknown }>(CONVEX_CONFIG, {}).accessToken;
+  return typeof token === "string" && token ? token : null;
 }
 
 export function setConvexToken(token: string) {
@@ -180,9 +222,7 @@ export function setConvexToken(token: string) {
   // Preserve any other fields Convex may keep in the file.
   const existing = readJSON<Record<string, unknown>>(CONVEX_CONFIG, {});
   existing.accessToken = token;
-  writeFileSync(CONVEX_CONFIG, JSON.stringify(existing, null, 2) + "\n", {
-    mode: 0o600,
-  });
+  writeFileAtomic(CONVEX_CONFIG, JSON.stringify(existing, null, 2) + "\n");
 }
 
 // --- Verify a token against Convex (also reveals its teams) -----------------
@@ -264,7 +304,11 @@ export function projectDeployment(dir: string): string | null {
             let v = m[1].trim().replace(/^["']|["']$/g, "");
             // strip an inline "# team: ..." comment tail and the type prefix
             v = v.split("#")[0].trim();
-            return v.replace(/^(dev|prod|local|preview):/, "") || null;
+            v = v.replace(/^(dev|prod|local|preview):/, "");
+            // The value lands in a URL handed to the OS opener (`cmd /c start`
+            // on Windows) — only accept real deployment-name characters, so a
+            // hostile .env.local can't smuggle shell metacharacters through.
+            return /^[A-Za-z0-9._-]+$/.test(v) ? v : null;
           }
         }
       } catch {
