@@ -1,0 +1,23 @@
+{
+  "name": "convex-switch",
+  "version": "0.1.0",
+  "description": "Bind Convex accounts to projects and auto-activate the right one when you cd in. No deploy keys, no tokens in project files.",
+  "type": "module",
+  "bin": {
+    "cvx": "bin/cvx.ts"
+  },
+  "files": [
+    "bin"
+  ],
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "keywords": [
+    "convex",
+    "cli",
+    "accounts",
+    "multi-account",
+    "workspace"
+  ],
+  "license": "MIT"
+}

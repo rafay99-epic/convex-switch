@@ -1,0 +1,123 @@
+# convex-switch (`cvx`)
+
+Run multiple Convex accounts across multiple projects at once — without
+logging in and out, without deploy keys, and without putting any secrets in
+your project files.
+
+You link a project folder to an account **once**. After that, the moment you
+`cd` into that folder the right account becomes active, and plain
+`bun run dev` (i.e. `convex dev`) just works. Start 5–6 projects in 5–6
+terminals — each grabs its own account as it launches and they all run at the
+same time.
+
+## Purpose
+
+The Convex CLI only remembers **one** logged-in account at a time — it lives in
+a single global file, `~/.convex/config.json`. If you juggle several Convex
+accounts (personal, work, clients) across many projects, that means constantly
+`convex logout` / `convex login` churn every time you switch projects, and you
+can never run two accounts' projects side by side.
+
+`convex-switch` removes that friction entirely. Log into each account once, tag
+it, and bind your projects to accounts. From then on the correct account is
+selected automatically per project — no manual switching, no deploy keys, and
+no tokens sitting inside your repositories. It turns "which account am I on
+right now?" into a non-question.
+
+## How it works (the one trick)
+
+The Convex CLI decides *which account you are* by reading a single global file:
+
+```
+~/.convex/config.json   →   { "accessToken": "..." }
+```
+
+`cvx` keeps a private vault of your account tokens and a map of
+project → account. A `chpwd` shell hook calls `cvx activate` on every `cd`;
+when you enter a linked folder it rewrites that one global file to the linked
+account. Nothing is injected at runtime, nothing lives in your repos.
+
+```
+~/.convex-switch/
+  accounts.json   # name -> { token, teams }        (chmod 600)
+  links.json      # /abs/project/path -> account     (chmod 600)
+```
+
+Because a running `convex dev` caches its deployment credentials at startup,
+swapping the global file afterwards doesn't disturb sessions already
+running — that's what makes true simultaneous multi-account work.
+
+## Install
+
+```bash
+bun link            # from this repo — exposes `cvx` globally
+cvx hook --install  # adds the cd-hook to ~/.zshrc (once)
+exec zsh            # reload your shell
+```
+
+## Set up your accounts (once each)
+
+The easy way — `cvx login <name>` opens a fresh browser sign-in and stores it:
+
+```bash
+cvx login personal    # browser sign-in, stored as "personal"
+cvx login work        # browser sign-in (different account), stored as "work"
+```
+
+> **Gotcha:** plain `npx convex login` **no-ops if the device is already
+> authorized** ("This device has previously been authorized…") — so it won't
+> switch you to a second account. You must force a fresh sign-in with
+> `npx convex login --force`. `cvx login` passes `--force` for you.
+
+Manual equivalent (e.g. to also capture the account you're *already* signed
+into):
+
+```bash
+cvx add personal            # snapshot the login currently in ~/.convex/config.json
+npx convex login --force    # force browser sign-in as the next account
+cvx add work
+```
+
+## Wire projects to accounts
+
+```bash
+cd ~/Code/project-a && cvx link personal
+cd ~/Code/project-b && cvx link work
+cd ~/Code/project-c && cvx link personal   # one account → many projects
+```
+
+## Daily use
+
+```bash
+cd ~/Code/project-a     # ⇄ convex account → personal
+bun run dev             # runs as personal
+
+# new terminal, at the same time:
+cd ~/Code/project-b     # ⇄ convex account → work
+bun run dev             # runs as work — both live simultaneously
+```
+
+## Commands
+
+| Command | What it does |
+| --- | --- |
+| `cvx add [name]` | Store the current `~/.convex` login as an account |
+| `cvx login <name>` | `npx convex login`, then store it as `<name>` |
+| `cvx link <account> [path]` | Link a project dir (default cwd) to an account |
+| `cvx unlink [path]` | Remove a link |
+| `cvx activate [-q]` | Activate this dir's account (the hook calls this) |
+| `cvx status` | Show the active account and this dir's link |
+| `cvx accounts` | List stored accounts |
+| `cvx ls` | List linked projects |
+| `cvx which [path]` | Print the account name for a dir (scripting) |
+| `cvx rm <account>` | Forget an account and its links |
+| `cvx hook [--install]` | Print (or install) the zsh cd-hook |
+
+## Notes
+
+- Tokens live only in `~/.convex-switch/` (chmod 600) — never in a repo,
+  never in `.env.local`, no deploy keys.
+- To rotate/refresh an account, `npx convex login` into it again then
+  `cvx add <name> --force`.
+- Non-zsh shells: run `cvx hook` and adapt the snippet to your shell's
+  directory-change hook.
