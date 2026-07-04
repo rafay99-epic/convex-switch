@@ -1,0 +1,31 @@
+README.md
+  s_326bad0e8bda7f::t_3facca49929327 63-64,70-73
+  s_326bad0e8bda7f::t_0f19838cd0e601 1
+npm/launcher.js
+  s_326bad0e8bda7f::t_a025a08124e735 11
+  s_326bad0e8bda7f::t_23aa59b3330751 18
+.github/scripts/publish-npm.sh
+  s_326bad0e8bda7f::t_40ef5f38b38d27 52-53
+  s_326bad0e8bda7f::t_4fe8db00abb629 24
+  s_326bad0e8bda7f::t_35dd462b3d90a7 74
+  s_326bad0e8bda7f::t_bd119a1f77fb43 102
+  s_326bad0e8bda7f::t_b83972ffbca555 3,6-10
+.github/workflows/release.yml
+  s_326bad0e8bda7f::t_132b52859a7e65 75
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ca20e39a44d538426a7f42c764c6a228374a2a60",
+  "prompts": {},
+  "sessions": {
+    "s_326bad0e8bda7f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c31b8df-1252-41be-801e-81f849ff95bd",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
