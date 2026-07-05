@@ -212,6 +212,19 @@ man/cvx.1         man page (installed by Homebrew/npm → `man cvx`)
 First run of a bare `cvx` shows a welcome screen; `cvx welcome` shows it again,
 and `man cvx` opens the manual.
 
+## Testing
+
+```sh
+bun test          # full suite: parser + store units, and an e2e matrix that
+                  # drives every command against a throwaway CVX_HOME
+```
+
+The suite runs in ~2s, needs no setup, and never touches your real vault —
+CI (`.github/workflows/test.yml`) runs it on every PR. Three flows can't run
+headless and stay manual (use the sandbox below): real `cvx login` (browser),
+the interactive migration prompt (needs a PTY), and `cvx keychain enable`
+(the OS keychain is per-user).
+
 ## Testing safely (sandbox)
 
 Never test a build against your real vault. Everything cvx touches — the vault,

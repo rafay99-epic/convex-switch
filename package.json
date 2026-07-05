@@ -6,6 +6,10 @@
   "bin": {
     "cvx": "bin/cvx.ts"
   },
+  "scripts": {
+    "test": "bun test",
+    "build": "bun build ./bin/cvx.ts --compile --outfile dist/cvx"
+  },
   "files": [
     "bin"
   ],
