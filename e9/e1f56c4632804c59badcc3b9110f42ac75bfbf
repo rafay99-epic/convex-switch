@@ -1,0 +1,36 @@
+src/commands.ts
+  s_d679e3b5467c5a::t_82ce008eda1ecc 846,850-851,858
+  s_d679e3b5467c5a::t_0b37b92f6c3794 151,155,157
+  s_d679e3b5467c5a::t_8f7f71cd69939f 871-875
+  s_d679e3b5467c5a::t_5b55df73114af1 46-60
+  s_d679e3b5467c5a::t_ab9b8e5cd82d5e 182
+  s_d679e3b5467c5a::t_1634e184fb4eac 253,372,392,397,412,497,499,534,548
+README.md
+  s_d679e3b5467c5a::t_50cc54ba3cfb37 13-26
+  s_d679e3b5467c5a::t_9fc1c2119a4af0 229-231
+src/ui.ts
+  s_d679e3b5467c5a::t_5e1f45b338d936 2-4,9-19,22,73,83,85,91-116,121-123,140-141,146,152,158,167
+src/spinner.ts
+  s_d679e3b5467c5a::t_9d36311959d082 12,14-18,21,29,31
+  s_d679e3b5467c5a::t_552c889d677837 1-11,13,19-20,22-28,30,32-34
+src/colors.ts
+  s_d679e3b5467c5a::t_83ae8d8c1ae783 8-9,14,25-84
+CLAUDE.md
+  s_d679e3b5467c5a::t_025b25809da0a6 68-80
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e9e1f56c4632804c59badcc3b9110f42ac75bfbf",
+  "prompts": {},
+  "sessions": {
+    "s_d679e3b5467c5a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e026300c-e577-40d9-8080-e0f2676d989b",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
