@@ -2,3 +2,6 @@
 # so no import-order accident can point src/paths.ts at the real home dir.
 [test]
 preload = ["./tests/preload.ts"]
+# E2E tests spawn real processes; a cold Windows CI runner can take >5s for
+# the first spawn that probes npx (bun's default per-test timeout is 5000ms).
+timeout = 20000
