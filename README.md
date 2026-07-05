@@ -11,18 +11,17 @@ terminals — each grabs its own account as it launches and they all run at the
 same time.
 
 ```
-      __.--.__
-    .'  o     '-._
-    \             '-.___,
-     \   __    __      _)
-      `-'  `--'  `---'(@
+  (◕‿◕)~@    happy — the right account is active
+  (⊙︵⊙)~@    alarmed — this project's team doesn't match the account
+  (–ᴗ–)ᶻ~@   asleep — the encrypted vault is locked
+  (◕‿<)~@    that's `cvx doctor` coming back clean
 ```
 
 Meet **Vex**, the account chameleon. A chameleon changes color to match its
-surroundings; cvx changes your account to match your project. In `cvx status`
-Vex wears the active account's color — every account gets a stable color of
-its own, used across `accounts`, `ls`, and switch messages, so you learn to
-recognize where you are at a glance.
+surroundings; cvx changes your account to match your project — so Vex wears
+the **active account's color** and her face reacts to what's going on. Every
+account gets a stable color of its own, used across `accounts`, `ls`, and
+switch messages, so you learn to recognize where you are at a glance.
 
 ## Purpose
 

@@ -54,8 +54,8 @@ import {
   teamLabel,
   askHidden,
   accountColor,
-  mascot,
-  mascotWink,
+  vex,
+  type VexMood,
 } from "./ui";
 import { spin } from "./spinner";
 import { parseFlags } from "./args";
@@ -93,10 +93,16 @@ function ago(iso?: string): string | null {
  * belongs to, this project would deploy to a DIFFERENT account than the one
  * being activated — say so loudly, even in quiet (hook) mode.
  */
-function warnTeamMismatch(dir: string, name: string, acc: Account) {
-  if (!acc.teams.length) return; // unverified account — nothing to compare
+function mismatchedTeam(dir: string, acc: Account): string | null {
+  if (!acc.teams.length) return null; // unverified account — nothing to compare
   const team = projectEnv(dir).team;
-  if (!team || acc.teams.some((t) => t.slug === team)) return;
+  if (!team || acc.teams.some((t) => t.slug === team)) return null;
+  return team;
+}
+
+function warnTeamMismatch(dir: string, name: string, acc: Account) {
+  const team = mismatchedTeam(dir, acc);
+  if (!team) return;
   console.log(
     `${yellow("▲")} team mismatch: this project's deployment belongs to ${bold(team)}, ` +
       `but ${bold(name)} only has ${acc.teams.map((t) => t.slug).join(", ")}.\n` +
@@ -394,7 +400,8 @@ export function cmdActivate(args: string[]) {
     }
     setConvexToken(token);
     writeActive(link.account, token);
-    console.log(`${cyan("⇄")} convex account → ${accountColor(link.account)} ${teamLabel(acc)}`);
+    const face = process.stdout.isTTY ? `  ${vex("happy", link.account)}` : "";
+    console.log(`${cyan("⇄")} convex account → ${accountColor(link.account)} ${teamLabel(acc)}${face}`);
   } catch (e) {
     if (!quiet) console.error(red("cvx: ") + (e as Error).message);
   }
@@ -494,8 +501,17 @@ export function cmdStatus(args: string[] = []) {
     return;
   }
 
-  if (process.stdout.isTTY) console.log(mascot(active) + "\n");
-  console.log(bold("Active convex account:"));
+  // Locked first: a locked vault makes every token unreadable, so `active`
+  // is always null while locked — sleepy must win over curious.
+  const mood: VexMood = vaultLocked()
+    ? "sleepy"
+    : !active
+      ? "curious"
+      : link && accounts[link.account] && mismatchedTeam(process.cwd(), accounts[link.account])
+        ? "alarm"
+        : "happy";
+  const face = process.stdout.isTTY ? `   ${vex(mood, active)}` : "";
+  console.log(bold("Active convex account:") + face);
   if (active) console.log(`  ${green("●")} ${accountColor(active)} ${teamLabel(accounts[active])}`);
   else if (loggedIn)
     console.log(`  ${yellow("●")} unknown login ${dim("(run `cvx add <name>` to name it)")}`);
@@ -870,7 +886,7 @@ export async function cmdDoctor(args: string[] = []) {
   console.log();
   console.log(
     healthy
-      ? green("Everything looks good.") + "  " + mascotWink()
+      ? green("Everything looks good.") + "  " + dim("~ Vex approves ") + vex("wink") + dim(" ~")
       : yellow("Some checks need attention (see above)."),
   );
   if (!healthy) process.exitCode = 1;

@@ -89,37 +89,64 @@ export function banner(): string {
 }
 
 // --- Vex, the account chameleon ----------------------------------------------
-// A chameleon changes color to match its surroundings; cvx changes your
-// account to match your project. Vex tints herself with the ACTIVE account's
-// color, so `cvx status` tells you where you are before you read a word.
+// Small, alive, expressive. A chameleon changes color to match its
+// surroundings; cvx changes your account to match your project — so Vex wears
+// the ACTIVE account's color and her face reacts to what's going on. Her tail
+// is the little `~@` curl.
 
-const VEX = [
-  "    __.--.__",
-  "  .'  o     '-._",
-  "  \\             '-.___,",
-  "   \\   __    __      _)",
-  "    `-'  `--'  `---'(@",
-];
+export type VexMood = "happy" | "wink" | "blink" | "alarm" | "sleepy" | "curious";
+
+const FACE: Record<VexMood, string> = {
+  happy: "(◕‿◕)",
+  wink: "(◕‿<)",
+  blink: "(–‿–)",
+  alarm: "(⊙︵⊙)",
+  sleepy: "(–ᴗ–)ᶻ",
+  curious: "(◕.◕)?",
+};
 
 const VEX_DEFAULT = 114; // resting chameleon green
 
-/** Vex, tinted. Pass an account name to dress her in that account's color. */
-export function mascot(accountName?: string | null): string {
+/** Vex, one glyph tall. Pass an account name to dress her in its color. */
+export function vex(mood: VexMood = "happy", accountName?: string | null): string {
   const code = accountName ? accountColorCode(accountName) : VEX_DEFAULT;
-  return VEX.map((l) => "  " + fg256(code, l)).join("\n");
+  return fg256(code, `${FACE[mood]}~@`);
 }
 
-/** One-line cameo for small moments (doctor's all-clear). */
-export function mascotWink(): string {
-  return dim("~ Vex approves ") + fg256(VEX_DEFAULT, "(o‿<)@") + dim(" ~");
+/**
+ * Welcome intro: Vex blinks and shifts through a few account colors before
+ * settling — chameleons gonna chameleon. TTY-only; pipes get one static line.
+ */
+async function vexIntro(): Promise<void> {
+  const tag = dim("Vex — the account chameleon");
+  if (!process.stdout.isTTY || process.env.NO_COLOR) {
+    console.log(`  ${vex()}  ${tag}\n`);
+    return;
+  }
+  const frames: Array<[VexMood, number]> = [
+    ["blink", VEX_DEFAULT],
+    ["happy", VEX_DEFAULT],
+    ["happy", 45],
+    ["happy", 213],
+    ["happy", 214],
+    ["happy", 141],
+    ["blink", VEX_DEFAULT],
+    ["happy", VEX_DEFAULT],
+  ];
+  process.stdout.write("\x1b[?25l");
+  for (const [mood, code] of frames) {
+    process.stdout.write(`\r  ${fg256(code, FACE[mood] + "~@")}  ${dim("…")}`);
+    await new Promise((r) => setTimeout(r, 130));
+  }
+  process.stdout.write(`\r\x1b[2K\x1b[?25h  ${vex()}  ${tag}\n\n`);
 }
 
 // --- First-run welcome ------------------------------------------------------
 
-export function welcome(): void {
+export async function welcome(): Promise<void> {
   console.log(banner());
-  console.log(mascot() + "\n");
-  console.log(`  ${bold("Welcome!")} ${dim("This is Vex — she turns the color of whatever account is active.")}
+  await vexIntro();
+  console.log(`  ${bold("Welcome!")} ${dim("Vex turns the color of whatever account is active.")}
   Run all your Convex accounts across projects at once —
   no login/logout churn, no deploy keys, no tokens in your repos.
 
