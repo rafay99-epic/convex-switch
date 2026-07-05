@@ -15,6 +15,45 @@ export function die(msg: string): never {
   process.exit(1);
 }
 
+/**
+ * Prompt without echoing (passphrases). Scripts should prefer the
+ * CVX_PASSPHRASE env var; callers check it before prompting.
+ */
+export async function askHidden(question: string): Promise<string> {
+  if (!process.stdin.isTTY)
+    die("This prompt needs a terminal. In scripts, set CVX_PASSPHRASE instead.");
+  process.stdout.write(question);
+  const stdin = process.stdin;
+  return await new Promise((resolve) => {
+    let buf = "";
+    const onData = (d: Buffer) => {
+      for (const ch of d.toString("utf8")) {
+        if (ch === "\r" || ch === "\n") {
+          cleanup();
+          process.stdout.write("\n");
+          return resolve(buf);
+        }
+        if (ch === "\x03") {
+          // Ctrl-C
+          cleanup();
+          process.stdout.write("\n");
+          process.exit(130);
+        }
+        if (ch === "\x7f" || ch === "\b") buf = buf.slice(0, -1);
+        else buf += ch;
+      }
+    };
+    const cleanup = () => {
+      stdin.setRawMode(false);
+      stdin.pause();
+      stdin.off("data", onData);
+    };
+    stdin.setRawMode(true);
+    stdin.resume();
+    stdin.on("data", onData);
+  });
+}
+
 export function teamLabel(acc: Account): string {
   if (!acc.teams.length) return dim("(unverified)");
   return dim(acc.teams.map((t) => t.slug).join(", "));
@@ -76,20 +115,23 @@ ${bold("Wire projects to accounts")}
 
 ${bold("Everyday")}
   cd <project> && bun run dev   the linked account is activated automatically
-  cvx use                       activate — or pick an account if unlinked
+  cvx use [account]             activate by name — or pick one if unlinked
   cvx run <account> -- <cmd>    run one command as <account> (no global change)
   cvx open                      open the Convex dashboard for this project
   cvx status [--json]           show active account + this dir's link
-  cvx accounts                  list stored accounts
+  cvx accounts                  list stored accounts (+ last verified)
   cvx ls                        list linked projects
 
 ${bold("Manage")}
   cvx rename <old> <new>        rename an account, keep its links
   cvx rm <account>              forget an account (and its links)
+  cvx refresh --all             re-authenticate every stored account
   cvx which [path]              print the account name for a dir (scripting)
   cvx prompt                    print the active account (for a shell prompt)
   cvx keychain <status|…>       store tokens in the OS keychain
-  cvx doctor                    check setup + token health
+  cvx vault <status|…>          passphrase-encrypt stored tokens
+  cvx export · import <file>    encrypted vault backup · restore (new machine)
+  cvx doctor · upgrade          check setup + token health · check for updates
   cvx welcome · version         the welcome screen · the version
 
 Vault: ${cyan(shortPath(VAULT))}  ${dim("(chmod 600, never in your projects)")}

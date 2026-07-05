@@ -23,6 +23,7 @@ import {
   loadToken,
   deleteToken,
 } from "./keychain";
+import { decryptToken, encryptToken } from "./vault";
 
 // Placeholder for local/dev runs; the release workflow stamps the real
 // 0.<commit-count> version into this line before compiling (see release.yml).
@@ -30,16 +31,8 @@ export const VERSION = "0.0.0-dev";
 
 // --- Paths & constants ------------------------------------------------------
 
-/**
- * Everything cvx touches lives under this base dir: the vault, the global
- * Convex config it swaps, and the rc files `hook --install` edits. Setting
- * CVX_HOME relocates ALL of it — a fully isolated sandbox for testing a new
- * build without risking the real vault (`CVX_HOME=/tmp/cvx-sandbox cvx …`).
- * NOTE: the OS keychain is per-user, not per-HOME — stick to the default
- * file backend in a sandbox (don't run `cvx keychain enable` there).
- */
-export const HOME = process.env.CVX_HOME || homedir();
-export const VAULT = join(HOME, ".convex-switch");
+export { HOME, VAULT } from "./paths"; // resolved in ONE place (CVX_HOME sandbox)
+import { HOME, VAULT } from "./paths";
 const ACCOUNTS_FILE = join(VAULT, "accounts.json");
 const LINKS_FILE = join(VAULT, "links.json");
 const CONFIG_FILE = join(VAULT, "config.json");
@@ -58,15 +51,18 @@ export const SCHEMA = 2;
 export type Team = { slug: string; name: string };
 /**
  * An account's token lives in exactly one place: inline (`token`, the default
- * file vault), the OS keychain (`keychain: true`), or a DPAPI blob (`enc`, on
- * Windows). Resolve with tokenOf(); never read `.token` directly.
+ * file vault), the OS keychain (`keychain: true`), a DPAPI blob (`enc`, on
+ * Windows), or a passphrase-encrypted blob (`pw`, see vault.ts). Resolve with
+ * tokenOf(); never read `.token` directly.
  */
 export type Account = {
   token?: string;
   keychain?: boolean;
   enc?: string;
+  pw?: string;
   teams: Team[];
   addedAt: string;
+  verifiedAt?: string; // last successful token verification against Convex
 };
 export type Accounts = Record<string, Account>;
 export type Links = Record<string, string>; // absolute project path -> account name
@@ -153,17 +149,23 @@ export { detectBackend, deleteToken };
 
 /** Resolve an account's actual token from wherever its record keeps it. */
 export function tokenOf(name: string, acc: Account): string | null {
+  if (acc.pw) return decryptToken(acc.pw); // null while the vault is locked
   return loadToken(name, acc);
 }
 
 /** Build an account record that stores `token` via the given backend. */
-export function makeTokenRecord(backend: Backend, name: string, token: string) {
+export function makeTokenRecord(
+  backend: Backend,
+  name: string,
+  token: string,
+): { token?: string; keychain?: boolean; enc?: string; pw?: string } {
+  if (backend === "passphrase") return { pw: encryptToken(token) }; // throws if locked
   return storeToken(backend, name, token);
 }
 
 /** Rebuild an account around a new token record, preserving its metadata. */
-export function withTokenRecord(acc: Account, rec: ReturnType<typeof storeToken>): Account {
-  return { teams: acc.teams, addedAt: acc.addedAt, ...rec };
+export function withTokenRecord(acc: Account, rec: ReturnType<typeof makeTokenRecord>): Account {
+  return { teams: acc.teams, addedAt: acc.addedAt, verifiedAt: acc.verifiedAt, ...rec };
 }
 
 /**
@@ -300,11 +302,12 @@ export function resolveLink(dir: string): { path: string; account: string } | nu
 }
 
 /**
- * Read CONVEX_DEPLOYMENT from the nearest .env.local (walking up from dir).
- * Returns the deployment name without its `dev:`/`prod:`/`local:` type prefix,
- * or null. Used by `cvx open`.
+ * Read the CONVEX_DEPLOYMENT line from the nearest .env.local (walking up from
+ * dir): the deployment name without its `dev:`/`prod:` type prefix, and the
+ * team slug from the `# team: …` comment the Convex CLI writes on that line.
+ * Used by `cvx open` (deployment) and the wrong-account guard (team).
  */
-export function projectDeployment(dir: string): string | null {
+export function projectEnv(dir: string): { deployment: string | null; team: string | null } {
   let cur = canon(dir);
   while (true) {
     const envFile = join(cur, ".env.local");
@@ -317,10 +320,12 @@ export function projectDeployment(dir: string): string | null {
             // strip an inline "# team: ..." comment tail and the type prefix
             v = v.split("#")[0].trim();
             v = v.replace(/^(dev|prod|local|preview):/, "");
-            // The value lands in a URL handed to the OS opener (`cmd /c start`
-            // on Windows) — only accept real deployment-name characters, so a
-            // hostile .env.local can't smuggle shell metacharacters through.
-            return /^[A-Za-z0-9._-]+$/.test(v) ? v : null;
+            const team = (m[2] ?? "").match(/#\s*team:\s*([A-Za-z0-9._-]+)/)?.[1] ?? null;
+            // The deployment lands in a URL handed to the OS opener
+            // (`cmd /c start` on Windows) — only accept real deployment-name
+            // characters, so a hostile .env.local can't smuggle shell
+            // metacharacters through.
+            return { deployment: /^[A-Za-z0-9._-]+$/.test(v) ? v : null, team };
           }
         }
       } catch {
@@ -328,9 +333,13 @@ export function projectDeployment(dir: string): string | null {
       }
     }
     const parent = dirname(cur);
-    if (parent === cur) return null;
+    if (parent === cur) return { deployment: null, team: null };
     cur = parent;
   }
+}
+
+export function projectDeployment(dir: string): string | null {
+  return projectEnv(dir).deployment;
 }
 
 /** Name of the account whose token the global config currently holds. */

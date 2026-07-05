@@ -15,7 +15,9 @@ import { spawnSync } from "node:child_process";
 
 const SERVICE = "convex-switch";
 
-export type Backend = "file" | "macos" | "libsecret" | "dpapi";
+// "passphrase" records are handled by vault.ts (store.ts routes them there);
+// it appears in this union because it's a `config.storage` value like the rest.
+export type Backend = "file" | "macos" | "libsecret" | "dpapi" | "passphrase";
 
 function sh(cmd: string, args: string[], input?: string) {
   return spawnSync(cmd, args, { encoding: "utf8", input, timeout: 15000 });
@@ -42,6 +44,7 @@ export function backendLabel(b: Backend): string {
     macos: "macOS Keychain",
     libsecret: "libsecret (GNOME Keyring / KWallet)",
     dpapi: "Windows DPAPI",
+    passphrase: "passphrase-encrypted file",
   }[b];
 }
 

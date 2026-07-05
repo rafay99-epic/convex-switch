@@ -52,10 +52,12 @@ PowerShell \fB$PROFILE\fR). The shell is auto-detected when \fB--shell\fR is omi
 Print a shell completion script (completes commands and account names).
 .SS Everyday
 .TP
-.B cvx use \fR[\fIpath\fR]
-Activate the account linked to a directory. If the directory isn't linked and
-the terminal is interactive, pick an account from a list (uses \fBfzf\fR if
-installed) and optionally link the directory.
+.B cvx use \fR[\fIaccount\fR|\fIpath\fR]
+With an account name: activate that account globally, from anywhere. With a
+path (or nothing): activate the directory's linked account; if unlinked and
+the terminal is interactive, pick from a list (uses \fBfzf\fR if installed)
+and optionally link the directory. A name wins over a same-named directory
+\(em use \fI./dir\fR to force the path meaning.
 .TP
 .B cvx run \fIaccount\fR \fR[\fB--\fR] \fIcommand\fR ...
 Run \fIcommand\fR with the given account active for that process only, by
@@ -97,6 +99,24 @@ Show or change where account tokens are stored. \fBenable\fR moves them into the
 OS keychain (macOS Keychain, libsecret on Linux, DPAPI on Windows); \fBdisable\fR
 moves them back to the chmod-600 file vault.
 .TP
+.B cvx vault \fR<\fBstatus\fR|\fBencrypt\fR|\fBdecrypt\fR|\fBunlock\fR|\fBlock\fR>
+Passphrase-encrypt the stored tokens (AES-256-GCM, scrypt-derived key).
+\fBunlock\fR caches the key for the session (cleared by \fBlock\fR or a
+reboot); while locked, tokens are unreadable and commands point at
+\fBcvx vault unlock\fR. Scripts can set \fBCVX_PASSPHRASE\fR instead.
+.TP
+.B cvx export \fR[\fIfile\fR] / \fBcvx import \fR\fIfile\fR [\fB--force\fR]
+Write a passphrase-encrypted backup of the vault (accounts + links), and
+restore it on another machine. Import merges; existing names are kept unless
+\fB--force\fR.
+.TP
+.B cvx refresh --all
+Re-authenticate every stored account in one sitting (a browser sign-in each).
+.TP
+.B cvx upgrade
+Check for a newer cvx release and print the exact upgrade command for how it
+was installed (Homebrew, npm/bun, or GitHub tarball).
+.TP
 .B cvx doctor \fR[\fB--no-tokens\fR]
 Check your setup and report problems: Node/npx availability, whether you have a
 Convex login, vault integrity, the token storage backend, the active account,
@@ -125,6 +145,13 @@ The Convex CLI's global login, which \fBcvx\fR rewrites.
 .TP
 .B NO_COLOR
 Disable colored output.
+.TP
+.B CVX_HOME
+Relocate everything cvx touches (vault, global Convex config, hook rc files)
+under this directory \(em a fully isolated sandbox for testing.
+.TP
+.B CVX_PASSPHRASE
+Non-interactive passphrase for \fBcvx vault\fR and \fBcvx export\fR/\fBimport\fR.
 .SH EXAMPLES
 .PP
 Add two accounts and wire up projects:

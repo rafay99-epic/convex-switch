@@ -31,9 +31,12 @@ import {
   cmdVersion,
   cmdDoctor,
   cmdKeychain,
+  cmdVault,
   cmdCompletions,
   cmdHook,
 } from "../src/commands";
+import { cmdUpgrade } from "../src/upgrade";
+import { cmdExport, cmdImport } from "../src/transfer";
 
 async function main() {
   ensureVault();
@@ -84,6 +87,14 @@ async function main() {
       return cmdPrompt();
     case "keychain":
       return cmdKeychain(rest);
+    case "vault":
+      return cmdVault(rest);
+    case "export":
+      return cmdExport(rest);
+    case "import":
+      return cmdImport(rest);
+    case "upgrade":
+      return cmdUpgrade();
     case "completions":
     case "completion":
       return cmdCompletions(rest);

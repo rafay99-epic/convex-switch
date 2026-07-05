@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, writeFileSync, mkdirSync, readFileSync } from "node:fs";
+import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-// CVX_HOME must be set BEFORE store.ts is imported — it resolves HOME at load.
-const SANDBOX = mkdtempSync(join(tmpdir(), "cvx-store-test."));
-process.env.CVX_HOME = SANDBOX;
+// The preload (tests/preload.ts) bound CVX_HOME to a throwaway sandbox before
+// any test file loaded — use THAT, never a private mkdtemp, so this file's
+// direct fs paths always match where store actually reads/writes.
+const SANDBOX = process.env.CVX_HOME!;
 const store = await import("../src/store");
 
 describe("validAccountName", () => {

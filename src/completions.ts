@@ -5,9 +5,9 @@
  */
 
 // Subcommands that take an account name as their first argument.
-const ACCOUNT_CMDS = "link rm rename run refresh";
+const ACCOUNT_CMDS = "link rm rename run refresh use";
 const SUBCOMMANDS =
-  "login add link unlink rm rename activate use run open status accounts ls which prompt refresh doctor hook completions keychain welcome version help";
+  "login add link unlink rm rename activate use run open status accounts ls which prompt refresh doctor hook completions keychain vault export import upgrade welcome version help";
 
 const ZSH = `#compdef cvx
 _cvx() {
@@ -25,9 +25,11 @@ _cvx() {
         _describe -t accounts 'account' _accts
       fi ;;
     unlink|open|which) _files -/ ;;
+    import|export) _files ;;
     completions) _values 'shell' zsh bash fish powershell ;;
     hook) _values 'shell' zsh bash fish nu powershell ;;
     keychain) _values 'subcommand' status enable disable ;;
+    vault) _values 'subcommand' status encrypt decrypt unlock lock ;;
   esac
 }
 _cvx "\$@"
@@ -48,7 +50,9 @@ const BASH = `_cvx() {
     completions) COMPREPLY=( \$(compgen -W "zsh bash fish powershell" -- "\$cur") ) ;;
     hook) COMPREPLY=( \$(compgen -W "zsh bash fish nu powershell --install --shell" -- "\$cur") ) ;;
     keychain) COMPREPLY=( \$(compgen -W "status enable disable" -- "\$cur") ) ;;
+    vault) COMPREPLY=( \$(compgen -W "status encrypt decrypt unlock lock" -- "\$cur") ) ;;
     unlink|open|which) COMPREPLY=( \$(compgen -d -- "\$cur") ) ;;
+    import|export) COMPREPLY=( \$(compgen -f -- "\$cur") ) ;;
   esac
 }
 complete -F _cvx cvx
@@ -61,6 +65,8 @@ complete -c cvx -n "__fish_seen_subcommand_from ${ACCOUNT_CMDS}" -a "(cvx accoun
 complete -c cvx -n "__fish_seen_subcommand_from completions" -a "zsh bash fish powershell"
 complete -c cvx -n "__fish_seen_subcommand_from hook" -a "zsh bash fish nu powershell"
 complete -c cvx -n "__fish_seen_subcommand_from keychain" -a "status enable disable"
+complete -c cvx -n "__fish_seen_subcommand_from vault" -a "status encrypt decrypt unlock lock"
+complete -c cvx -n "__fish_seen_subcommand_from import export" -F
 `;
 
 const PWSH = `Register-ArgumentCompleter -Native -CommandName cvx -ScriptBlock {
@@ -74,10 +80,11 @@ const PWSH = `Register-ArgumentCompleter -Native -CommandName cvx -ScriptBlock {
   }
   $sub = $tokens[1]
   $vals = @()
-  if ($sub -in 'link','rm','rename','run','refresh') { $vals = @(cvx accounts --names 2>$null) }
+  if ($sub -in 'link','rm','rename','run','refresh','use') { $vals = @(cvx accounts --names 2>$null) }
   elseif ($sub -eq 'completions') { $vals = 'zsh','bash','fish','powershell' }
   elseif ($sub -eq 'hook') { $vals = 'zsh','bash','fish','nu','powershell' }
   elseif ($sub -eq 'keychain') { $vals = 'status','enable','disable' }
+  elseif ($sub -eq 'vault') { $vals = 'status','encrypt','decrypt','unlock','lock' }
   $vals | Where-Object { $_ -like "$wordToComplete*" } |
     ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
 }

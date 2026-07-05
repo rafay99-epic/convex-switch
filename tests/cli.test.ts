@@ -7,7 +7,16 @@
  */
 import { beforeAll, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -294,6 +303,119 @@ describe("doctor / completions / hook", () => {
     expect(rc.split("# --- convex-switch").length - 1).toBe(1);
     // doctor now sees the hook
     expect(cvx(["doctor", "--no-tokens"]).out).toMatch(/shell hook\s+installed/);
+  });
+});
+
+describe("use by name", () => {
+  test("cvx use <account> activates globally from anywhere", () => {
+    seedAccounts();
+    const r = cvx(["use", "personal"]);
+    expect(r.code).toBe(0);
+    expect(JSON.parse(readFileSync(CONVEX_CFG, "utf8")).accessToken).toBe("tok-pers-BBB");
+    expect(readFileSync(ACTIVE, "utf8").split("\n")[0]).toBe("personal");
+  });
+  test("an unknown name in an unlinked dir falls through to the non-TTY error", () => {
+    const r = cvx(["use", "ghost"]);
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("isn't linked");
+  });
+});
+
+describe("team mismatch guard", () => {
+  test("warns loudly — even in quiet hook mode — when the project team isn't the account's", () => {
+    seedAccounts(); // work's only team slug is "wt"
+    cvx(["link", "work", PROJ]);
+    writeFileSync(
+      join(PROJ, ".env.local"),
+      "CONVEX_DEPLOYMENT=dev:happy-otter-123 # team: other-team, project: x\n",
+    );
+    const r = cvx(["activate", PROJ]);
+    expect(r.out).toContain("team mismatch");
+    expect(r.out).toContain("other-team");
+    expect(cvx(["activate", "-q", PROJ]).out).toContain("team mismatch");
+    // status shows it too
+    expect(cvx(["status"], { cwd: PROJ }).out).toContain("team mismatch");
+  });
+  test("silent when the team matches or there is no team note", () => {
+    writeFileSync(
+      join(PROJ, ".env.local"),
+      "CONVEX_DEPLOYMENT=dev:happy-otter-123 # team: wt, project: x\n",
+    );
+    expect(cvx(["activate", PROJ]).out).not.toContain("team mismatch");
+    writeFileSync(join(PROJ, ".env.local"), "CONVEX_DEPLOYMENT=dev:happy-otter-123\n");
+    expect(cvx(["activate", PROJ]).out).not.toContain("team mismatch");
+    rmSync(join(PROJ, ".env.local"), { force: true });
+  });
+});
+
+describe("vault (passphrase-encrypted tokens)", () => {
+  const env = { CVX_PASSPHRASE: "e2e-vault-passphrase" };
+  test("encrypt replaces plaintext tokens with pw blobs", () => {
+    seedAccounts();
+    const r = cvx(["vault", "encrypt"], { env });
+    expect(r.code).toBe(0);
+    const raw = readFileSync(ACCOUNTS, "utf8");
+    expect(raw).not.toContain("tok-work-AAA");
+    expect(JSON.parse(raw).work.pw).toBeDefined();
+    expect(JSON.parse(readFileSync(CONFIG, "utf8")).storage).toBe("passphrase");
+  });
+  test("activate works while unlocked", () => {
+    cvx(["link", "work", PROJ]);
+    expect(cvx(["activate", PROJ]).code).toBe(0);
+    expect(JSON.parse(readFileSync(CONVEX_CFG, "utf8")).accessToken).toBe("tok-work-AAA");
+  });
+  test("locked: activate prints the unlock hint even in quiet mode", () => {
+    expect(cvx(["vault", "lock"]).code).toBe(0);
+    writeFileSync(CONVEX_CFG, "{}\n"); // no fast-path masking
+    expect(cvx(["activate", "-q", PROJ]).out).toContain("vault locked");
+  });
+  test("wrong passphrase fails; the right one unlocks", () => {
+    expect(cvx(["vault", "unlock"], { env: { CVX_PASSPHRASE: "wrong-passphrase" } }).code).toBe(1);
+    expect(cvx(["vault", "unlock"], { env }).code).toBe(0);
+    expect(cvx(["activate", PROJ]).code).toBe(0);
+    expect(JSON.parse(readFileSync(CONVEX_CFG, "utf8")).accessToken).toBe("tok-work-AAA");
+  });
+  test("decrypt restores plaintext and removes the vault metadata", () => {
+    expect(cvx(["vault", "decrypt"], { env }).code).toBe(0);
+    expect(JSON.parse(readFileSync(ACCOUNTS, "utf8")).work.token).toBe("tok-work-AAA");
+    expect(existsSync(join(HOME, ".convex-switch", "vault.json"))).toBe(false);
+    expect(JSON.parse(readFileSync(CONFIG, "utf8")).storage).toBe("file");
+  });
+});
+
+describe("export / import via the CLI", () => {
+  const env = { CVX_PASSPHRASE: "e2e-export-pass" };
+  const file = join(HOME, "backup.export");
+  test("round-trip restores accounts and links", () => {
+    seedAccounts();
+    cvx(["link", "work", PROJ]);
+    expect(cvx(["export", file], { env }).code).toBe(0);
+    writeFileSync(ACCOUNTS, "{}");
+    writeFileSync(LINKS, "{}");
+    expect(cvx(["import", file], { env }).code).toBe(0);
+    const accs = JSON.parse(readFileSync(ACCOUNTS, "utf8"));
+    expect(accs.work.token).toBe("tok-work-AAA");
+    expect(cvx(["which", PROJ]).out.trim()).toBe("work");
+  });
+  test("wrong passphrase on import dies cleanly", () => {
+    const r = cvx(["import", file], { env: { CVX_PASSPHRASE: "wrong-pass-123" } });
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("wrong passphrase");
+  });
+});
+
+describe("refresh --all / help", () => {
+  test("refresh --all with an empty vault dies before any browser opens", () => {
+    writeFileSync(ACCOUNTS, "{}");
+    const r = cvx(["refresh", "--all"]);
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("No accounts");
+    seedAccounts();
+  });
+  test("help lists the new commands", () => {
+    const out = cvx(["help"]).out;
+    for (const s of ["cvx use [account]", "cvx vault", "cvx export", "refresh --all", "upgrade"])
+      expect(out).toContain(s);
   });
 });
 
