@@ -1,0 +1,106 @@
+src/upgrade.ts
+  s_d679e3b5467c5a::t_c695985707f260 31-32
+  s_d679e3b5467c5a::t_f7a8c5b40e63f8 1-30,33-83
+src/completions.ts
+  s_d679e3b5467c5a::t_ea037c9b1b397f 68-69
+  s_d679e3b5467c5a::t_d5f60379d3763b 83,87
+  s_d679e3b5467c5a::t_707955dbfefc98 8,10
+  s_d679e3b5467c5a::t_80117c9c88729d 28,32
+  s_d679e3b5467c5a::t_45813a3c1d58d7 53,55
+README.md
+  s_d679e3b5467c5a::t_f201335e9ceeb6 120-127
+  s_d679e3b5467c5a::t_2adcdef6117802 145,150,155,160-162
+  s_d679e3b5467c5a::t_85839c2d022fcb 213-214,219-223
+src/keychain.ts
+  s_d679e3b5467c5a::t_5c6e1a69b7afb6 47
+  s_d679e3b5467c5a::t_0f4556644a8678 18-20
+src/transfer.ts
+  s_d679e3b5467c5a::t_08e0e30deacdfe 28
+  s_d679e3b5467c5a::t_28b850fcaac32e 1-27,29-43,45-144,151-173
+  s_d679e3b5467c5a::t_a62158dfd6bd80 44
+  s_d679e3b5467c5a::t_75255208d4ff1b 145-150
+tests/transfer.test.ts
+  s_d679e3b5467c5a::t_4f548446fb3eda 2,5-7
+  s_d679e3b5467c5a::t_6db5ee5683750a 1,3-4,8-105
+tests/cli.test.ts
+  s_d679e3b5467c5a::t_27b131229a53ec 309-421
+  s_d679e3b5467c5a::t_846cf43080d41f 10-19
+src/ui.ts
+  s_d679e3b5467c5a::t_b0da7a0c9f0c5a 18-56
+  s_d679e3b5467c5a::t_64a3e3ff858e5a 118,122,128,132-134
+src/paths.ts
+  s_d679e3b5467c5a::t_126fb7dd5091e8 1-14
+src/store.ts
+  s_d679e3b5467c5a::t_caf29cff4c737b 34-35
+  s_d679e3b5467c5a::t_89e92a82863f0c 54-56,62,65
+  s_d679e3b5467c5a::t_03e416a563c682 26
+  s_d679e3b5467c5a::t_ec0dfa89c0f830 305-308,310,323-328,336,341-342
+  s_d679e3b5467c5a::t_178fbcc25d6f56 152,157-162,167-168
+  s_dcd1c8d8990156::t_88a5e5f4279e8e 343-344
+bin/cvx.ts
+  s_d679e3b5467c5a::t_4a96510ce6f0d3 90-97
+  s_d679e3b5467c5a::t_e8f8b4188eb328 34,38-39
+tests/store.test.ts
+  s_d679e3b5467c5a::t_00627850b950a7 2,6-9
+src/crypto.ts
+  s_d679e3b5467c5a::t_6764c826adf4ce 1-36
+CLAUDE.md
+  s_d679e3b5467c5a::t_d02a2a969cbdf3 55-61
+  s_d679e3b5467c5a::t_f3513dc3749c2a 70-72
+  s_d679e3b5467c5a::t_fc51066e1318b9 81-85
+tests/preload.ts
+  s_d679e3b5467c5a::t_2b19b295df3b2a 1-16
+src/vault.ts
+  s_d679e3b5467c5a::t_9d5d228fbdb7b1 1-98
+bunfig.toml
+  s_d679e3b5467c5a::t_3d9a3dd32f6a38 1-4
+man/cvx.1
+  s_d679e3b5467c5a::t_1c707458f23346 102-119,148-154
+  s_d679e3b5467c5a::t_36740233a762d6 55-60
+src/commands.ts
+  s_d679e3b5467c5a::t_15840591bcefe2 636
+  s_d679e3b5467c5a::t_1d2d529b4b6029 389-406,409,411-413,425
+  s_d679e3b5467c5a::t_210bc7ff792c0d 823,833-838
+  s_d679e3b5467c5a::t_1f94afe9610c3c 364-371
+  s_d679e3b5467c5a::t_7090b706d0d996 497-498
+  s_d679e3b5467c5a::t_c830bcd337ac84 648
+  s_d679e3b5467c5a::t_901b98fcae7547 68-92
+  s_d679e3b5467c5a::t_795247a6adce72 198-213
+  s_d679e3b5467c5a::t_8c9175f2d60717 680-755
+  s_d679e3b5467c5a::t_4c422365b6c63e 807-809
+  s_d679e3b5467c5a::t_4e6b76fadcaa13 516-520
+  s_d679e3b5467c5a::t_a918a2b97948c7 851
+  s_d679e3b5467c5a::t_0461fc509b6073 162-163
+  s_d679e3b5467c5a::t_1ced7cabe7e455 43,45-46
+  s_d679e3b5467c5a::t_c062ef4e8aa0fc 349
+src/migrate.ts
+  s_d679e3b5467c5a::t_76cf20c8026d70 96-97
+tests/upgrade.test.ts
+  s_d679e3b5467c5a::t_3645bdc348fbb5 1-55
+tests/crypto.test.ts
+  s_d679e3b5467c5a::t_fd0c5f539cbb40 1-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "408572d3c0a272528670c6b058e04165b49fdeb6",
+  "prompts": {},
+  "sessions": {
+    "s_d679e3b5467c5a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e026300c-e577-40d9-8080-e0f2676d989b",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    },
+    "s_dcd1c8d8990156": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a4fd5e4d-1c08-495b-859d-a05109ea76e7",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
