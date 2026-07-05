@@ -176,13 +176,15 @@ describe("run", () => {
     seedAccounts();
     // Run the Bun binary itself instead of /bin/sh -c "..." — a platform-neutral
     // stand-in for "some child process" that works identically on Windows.
+    // The inline script must contain NO SPACES: cmdRun spawns with shell:true
+    // on Windows (to resolve .cmd shims), so cmd.exe re-splits joined args.
     const r = cvx([
       "run",
       "work",
       "--",
       process.execPath,
       "-e",
-      "console.log('T=' + process.env.CONVEX_OVERRIDE_ACCESS_TOKEN)",
+      "console.log('T='+process.env.CONVEX_OVERRIDE_ACCESS_TOKEN)",
     ]);
     expect(r.code).toBe(0);
     expect(r.out).toContain("T=tok-work-AAA");
