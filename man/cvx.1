@@ -96,7 +96,7 @@ List linked projects; the current directory is marked.
 .B cvx which \fR[\fIpath\fR]
 Print the account name for a directory (exit 1 if none). For scripting.
 .TP
-.B cvx prompt
+.B cvx prompt \fR[\fB--starship\fR|\fB--color\fR]
 Print the active account name and nothing else \(em for embedding in a shell
 prompt. Fast and never errors.
 .SS Manage
@@ -108,6 +108,15 @@ Forget an account and any links pointing at it.
 Show or change where account tokens are stored. \fBenable\fR moves them into the
 OS keychain (macOS Keychain, libsecret on Linux, DPAPI on Windows); \fBdisable\fR
 moves them back to the chmod-600 file vault.
+.TP
+.B cvx undo \fR[\fB--list\fR] [\fB--yes\fR]
+Restore the vault (accounts, links, config, active marker) to how it was
+before the last change. A snapshot is taken automatically before every
+mutating command (rm, rename, unlink, import, scan, doctor --fix, storage
+migrations), capped at five. Running \fBundo\fR twice reverses the restore.
+Moving tokens to a more protected backend clears the history so old plaintext
+never lingers. OS-keychain secrets deleted from the keychain itself are not
+restorable.
 .TP
 .B cvx vault \fR<\fBstatus\fR|\fBencrypt\fR|\fBdecrypt\fR|\fBunlock\fR|\fBlock\fR>
 Passphrase-encrypt the stored tokens (AES-256-GCM, scrypt-derived key).

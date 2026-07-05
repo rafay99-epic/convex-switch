@@ -33,6 +33,7 @@ import {
   cmdDoctor,
   cmdKeychain,
   cmdVault,
+  cmdUndo,
   cmdCompletions,
   cmdHook,
 } from "../src/commands";
@@ -87,7 +88,9 @@ async function main() {
     case "which":
       return cmdWhich(rest);
     case "prompt":
-      return cmdPrompt();
+      return cmdPrompt(rest);
+    case "undo":
+      return cmdUndo(rest);
     case "keychain":
       return cmdKeychain(rest);
     case "vault":
