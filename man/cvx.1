@@ -40,6 +40,16 @@ account may be linked to many projects.
 .B cvx unlink \fR[\fIpath\fR]
 Remove a link.
 .TP
+.B cvx scan \fR[\fIdir\fR] [\fB--depth\fR \fIN\fR] [\fB--yes\fR]
+Walk \fIdir\fR (default: the current directory) up to \fIN\fR levels deep
+(default 4), find Convex projects (a directory whose \fI.env.local\fR has a
+\fBCONVEX_DEPLOYMENT\fR line), and propose a link for each whose deployment team
+matches exactly one stored account. Hidden directories and \fBnode_modules\fR are
+skipped, and a project directory is never descended into. In an interactive
+terminal it asks before linking; otherwise \fB--yes\fR is required to apply.
+Already-linked directories are left untouched (a conflicting link is reported,
+never overwritten).
+.TP
 .B cvx rename \fIold\fR \fInew\fR
 Rename an account, keeping every link that pointed at it.
 .TP
@@ -117,11 +127,15 @@ Re-authenticate every stored account in one sitting (a browser sign-in each).
 Check for a newer cvx release and print the exact upgrade command for how it
 was installed (Homebrew, npm/bun, or GitHub tarball).
 .TP
-.B cvx doctor \fR[\fB--no-tokens\fR]
+.B cvx doctor \fR[\fB--no-tokens\fR] [\fB--fix\fR]
 Check your setup and report problems: Node/npx availability, whether you have a
 Convex login, vault integrity, the token storage backend, the active account,
 and whether the shell hook is installed. Also pings Convex to check each stored
-token's health (skip that with \fB--no-tokens\fR). Exits non-zero on any problem.
+token's health (skip that with \fB--no-tokens\fR). With \fB--fix\fR it repairs
+what it can \(em installs a missing shell hook, prunes dead links, clears a
+stale active marker, and (interactively) offers to re-authenticate rejected
+tokens; problems it fixes no longer force a non-zero exit. Exits non-zero on any
+remaining problem.
 .TP
 .B cvx welcome
 Show the welcome screen again.

@@ -158,6 +158,7 @@ bun run dev             # runs as work — both live simultaneously
 | `cvx refresh <account>` / `--all` | Re-authenticate one account — or every account in one sitting |
 | `cvx link <account> [path]` | Link a project dir (default cwd) to an account |
 | `cvx unlink [path]` | Remove a link |
+| `cvx scan [dir] [--depth N] [--yes]` | Auto-discover projects under a dir and link them to accounts by team |
 | `cvx rename <old> <new>` | Rename an account, keeping its links |
 | `cvx rm <account>` | Forget an account and its links |
 | `cvx use [account]` | Activate by name from anywhere — or this dir's account / an interactive pick |
@@ -173,7 +174,7 @@ bun run dev             # runs as work — both live simultaneously
 | `cvx vault <status\|encrypt\|decrypt\|unlock\|lock>` | Passphrase-encrypt stored tokens (unlock once per session) |
 | `cvx export [file]` / `cvx import <file>` | Encrypted vault backup / restore — new-machine setup in one command |
 | `cvx upgrade` | Check for a newer release and print the exact upgrade command |
-| `cvx doctor` | Check setup + per-account token health |
+| `cvx doctor [--fix]` | Check setup + per-account token health (`--fix` repairs hook/links/marker/tokens) |
 | `cvx completions <shell>` | Print a completion script (zsh/bash/fish/powershell) |
 | `cvx hook [--install] [--shell …]` | Install the cd-hook (zsh/bash/fish/nu/powershell) |
 

@@ -44,4 +44,10 @@ describe("parseFlags", () => {
     expect(f.install).toBe(true);
     expect(f.shell).toBe("nu");
   });
+
+  test("--depth consumes a value", () => {
+    const f = parseFlags(["scan", "--depth", "3"]);
+    expect(f.depth).toBe("3");
+    expect(f._).toEqual(["scan"]);
+  });
 });

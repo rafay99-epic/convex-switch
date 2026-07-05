@@ -21,6 +21,7 @@ import {
   cmdRm,
   cmdActivate,
   cmdUse,
+  cmdScan,
   cmdRun,
   cmdOpen,
   cmdStatus,
@@ -70,6 +71,8 @@ async function main() {
       return cmdActivate(rest);
     case "use":
       return cmdUse(rest);
+    case "scan":
+      return cmdScan(rest);
     case "run":
       return cmdRun(rest);
     case "open":
