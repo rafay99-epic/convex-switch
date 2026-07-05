@@ -4,7 +4,7 @@
  */
 
 import { VERSION } from "./store";
-import { bold, dim, green, yellow, cyan } from "./ui";
+import { bold, dim, green, yellow, cyan, vexTag } from "./ui";
 
 const RELEASES_API = "https://api.github.com/repos/rafay99-epic/cvx/releases/latest";
 const RELEASES_URL = "https://github.com/rafay99-epic/cvx/releases/latest";
@@ -72,11 +72,11 @@ export async function cmdUpgrade(): Promise<void> {
   }
 
   if (compareVersions(VERSION, latest) >= 0) {
-    console.log(green(`  ✓ up to date (${VERSION})`));
+    console.log(green(`  ✓ up to date (${VERSION})`) + vexTag("happy"));
     return;
   }
 
-  console.log(`  ${dim(VERSION)} → ${bold(latest)} available\n`);
+  console.log(`  ${dim(VERSION)} → ${bold(latest)} available${vexTag("excited")}\n`);
   const channel = detectChannel(process.execPath);
   console.log(`  ${dim(`(${channel})`)} run:`);
   console.log(`    ${cyan(upgradeCommand(channel))}`);

@@ -55,6 +55,7 @@ import {
   askHidden,
   accountColor,
   vex,
+  vexTag,
   type VexMood,
 } from "./ui";
 import { spin } from "./spinner";
@@ -185,7 +186,9 @@ export async function cmdAdd(args: string[]) {
   if (token === currentConvexToken()) writeActive(name, token);
 
   const where = backend === "file" ? "" : dim(` (${backendLabel(backend)})`);
-  console.log(`${green("✓")} Stored account ${accountColor(name)} ${teamLabel(accounts[name])}${where}`);
+  console.log(
+    `${green("✓")} Stored account ${accountColor(name)} ${teamLabel(accounts[name])}${where}${vexTag("happy", name)}`,
+  );
   console.log(dim(`  Next: cd into a project and run  ${bold(`cvx link ${name}`)}`));
 }
 
@@ -226,7 +229,7 @@ export async function cmdRefresh(args: string[]) {
       console.log(`\n${cyan(`[${i + 1}/${names.length}]`)} ${bold(name)}`);
       await loginAndStore(name, `Sign into ${bold(name)} in the browser…`);
     }
-    console.log(`\n${green("✓")} All accounts refreshed.`);
+    console.log(`\n${green("✓")} All accounts refreshed.${vexTag("excited")}`);
     return;
   }
   const name = flags._[0];
@@ -256,7 +259,7 @@ export function cmdLink(args: string[]) {
   links[target] = account;
   writeLinks(links);
   console.log(
-    `${green("✓")} Linked ${bold(shortPath(target))} → ${accountColor(account)} ${teamLabel(acc)}`,
+    `${green("✓")} Linked ${bold(shortPath(target))} → ${accountColor(account)} ${teamLabel(acc)}${vexTag("happy", account)}`,
   );
 }
 
@@ -266,7 +269,7 @@ export function cmdUnlink(args: string[]) {
   if (!links[target]) die(`No link at ${shortPath(target)}`);
   delete links[target];
   writeLinks(links);
-  console.log(`${green("✓")} Unlinked ${bold(shortPath(target))}`);
+  console.log(`${green("✓")} Unlinked ${bold(shortPath(target))}${vexTag("sad")}`);
 }
 
 export function cmdRename(args: string[]) {
@@ -314,7 +317,7 @@ export function cmdRename(args: string[]) {
     writeActive(newName, movedToken ?? tokenOf(newName, accounts[newName]) ?? undefined);
 
   console.log(
-    `${green("✓")} Renamed ${bold(oldName)} → ${bold(newName)}${moved ? dim(` (${moved} link(s) updated)`) : ""}`,
+    `${green("✓")} Renamed ${bold(oldName)} → ${accountColor(newName)}${moved ? dim(` (${moved} link(s) updated)`) : ""}${vexTag("happy", newName)}`,
   );
 }
 
@@ -339,7 +342,7 @@ export function cmdRm(args: string[]) {
     }
   writeLinks(links);
   console.log(
-    `${green("✓")} Removed account ${bold(name)}${removed ? dim(` (and ${removed} link(s))`) : ""}`,
+    `${green("✓")} Removed account ${bold(name)}${removed ? dim(` (and ${removed} link(s))`) : ""}${vexTag("sad")}`,
   );
 }
 
@@ -400,8 +403,9 @@ export function cmdActivate(args: string[]) {
     }
     setConvexToken(token);
     writeActive(link.account, token);
-    const face = process.stdout.isTTY ? `  ${vex("happy", link.account)}` : "";
-    console.log(`${cyan("⇄")} convex account → ${accountColor(link.account)} ${teamLabel(acc)}${face}`);
+    console.log(
+      `${cyan("⇄")} convex account → ${accountColor(link.account)} ${teamLabel(acc)}${vexTag("happy", link.account)}`,
+    );
   } catch (e) {
     if (!quiet) console.error(red("cvx: ") + (e as Error).message);
   }
@@ -416,7 +420,9 @@ function activateByName(name: string, acc: Account) {
   }
   setConvexToken(token);
   writeActive(name, token);
-  console.log(`${cyan("⇄")} convex account → ${accountColor(name)} ${teamLabel(acc)}`);
+  console.log(
+    `${cyan("⇄")} convex account → ${accountColor(name)} ${teamLabel(acc)}${vexTag("happy", name)}`,
+  );
 }
 
 /**
@@ -801,7 +807,7 @@ export async function cmdScan(args: string[]) {
   }
 
   console.log(
-    `${green("✓")} ${dim("scan:")} linked ${bold(String(linked))}, already ${bold(String(already))}, skipped ${bold(String(skips.length))}.`,
+    `${green("✓")} ${dim("scan:")} linked ${bold(String(linked))}, already ${bold(String(already))}, skipped ${bold(String(skips.length))}.${vexTag(linked ? "happy" : "curious")}`,
   );
 }
 
@@ -832,9 +838,10 @@ export function cmdKeychain(args: string[]) {
     if (cfg.storage === "passphrase") destroyVaultMeta(); // tokens left the encrypted vault
     const n = Object.keys(accounts).length;
     console.log(
-      n
+      (n
         ? `${green("✓")} Moved ${n} account(s) into ${bold(backendLabel(available))}.`
-        : `${green("✓")} Token storage set to ${bold(backendLabel(available))} — new accounts will be stored there.`,
+        : `${green("✓")} Token storage set to ${bold(backendLabel(available))} — new accounts will be stored there.`) +
+        vexTag("happy"),
     );
     return;
   }
@@ -842,7 +849,7 @@ export function cmdKeychain(args: string[]) {
     migrateStorage(accounts, "file");
     writeConfig({ ...cfg, storage: "file" });
     if (cfg.storage === "passphrase") destroyVaultMeta(); // tokens left the encrypted vault
-    console.log(`${green("✓")} Moved tokens back to the file vault (chmod 600).`);
+    console.log(`${green("✓")} Moved tokens back to the file vault (chmod 600).${vexTag("happy")}`);
     return;
   }
   die(`Usage: ${bold("cvx keychain <status|enable|disable>")}`);
@@ -917,7 +924,9 @@ export async function cmdVault(args: string[]) {
     initVault(await newPassphrase());
     migrateStorage(accounts, "passphrase");
     writeConfig({ ...cfg, storage: "passphrase" });
-    console.log(`${green("✓")} Tokens encrypted with your passphrase ${dim("(unlocked for this session)")}.`);
+    console.log(
+      `${green("✓")} Tokens encrypted with your passphrase ${dim("(unlocked for this session)")}.${vexTag("wink")}`,
+    );
     console.log(dim("  `cvx vault lock` locks it; a reboot locks it too."));
     return;
   }
@@ -928,7 +937,7 @@ export async function cmdVault(args: string[]) {
     migrateStorage(readAccounts(), "file");
     writeConfig({ ...cfg, storage: "file" });
     destroyVaultMeta();
-    console.log(`${green("✓")} Tokens moved back to the plain file vault (chmod 600).`);
+    console.log(`${green("✓")} Tokens moved back to the plain file vault (chmod 600).${vexTag("happy")}`);
     return;
   }
 
@@ -936,13 +945,13 @@ export async function cmdVault(args: string[]) {
     if (!vaultInitialized()) die("Vault isn't passphrase-encrypted. Set it up with `cvx vault encrypt`.");
     const pass = process.env.CVX_PASSPHRASE ?? (await askHidden("Passphrase: "));
     if (!unlock(pass)) die("Wrong passphrase.");
-    console.log(`${green("✓")} Vault unlocked for this session.`);
+    console.log(`${green("✓")} Vault unlocked for this session.${vexTag("happy")}`);
     return;
   }
 
   if (sub === "lock") {
     lock();
-    console.log(`${green("✓")} Vault locked. Unlock with ${bold("cvx vault unlock")}.`);
+    console.log(`${green("✓")} Vault locked. Unlock with ${bold("cvx vault unlock")}.${vexTag("sleepy")}`);
     return;
   }
 
@@ -1115,7 +1124,8 @@ export async function cmdDoctor(args: string[] = []) {
   console.log();
   console.log(
     healthy
-      ? green("Everything looks good.") + "  " + dim("~ Vex approves ") + vex("wink") + dim(" ~")
+      ? green("Everything looks good.") +
+          (process.stdout.isTTY ? "  " + dim("~ Vex approves ") + vex("wink") + dim(" ~") : "")
       : yellow("Some checks need attention (see above)."),
   );
   if (!healthy) process.exitCode = 1;
@@ -1150,7 +1160,7 @@ export function cmdHook(args: string[]) {
 
   const rc = join(HOME, RC_FILES[shell]);
   if (installHookInto(shell)) {
-    console.log(`${green("✓")} Added hook to ${cyan(shortPath(rc))}.`);
+    console.log(`${green("✓")} Added hook to ${cyan(shortPath(rc))}.${vexTag("happy")}`);
     console.log(dim(`  Open a new terminal to activate it.`));
   } else {
     console.log(yellow(`Hook already present in ${shortPath(rc)} — nothing to do.`));
@@ -1191,6 +1201,6 @@ function installPwsh(snippet: string) {
   }
   mkdirSync(dirname(profile), { recursive: true });
   appendFileSync(profile, "\n" + snippet);
-  console.log(`${green("✓")} Added hook to ${cyan(profile)}.`);
+  console.log(`${green("✓")} Added hook to ${cyan(profile)}.${vexTag("happy")}`);
   console.log(dim("  Open a new PowerShell window to activate it."));
 }

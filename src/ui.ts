@@ -94,7 +94,15 @@ export function banner(): string {
 // the ACTIVE account's color and her face reacts to what's going on. Her tail
 // is the little `~@` curl.
 
-export type VexMood = "happy" | "wink" | "blink" | "alarm" | "sleepy" | "curious";
+export type VexMood =
+  | "happy"
+  | "wink"
+  | "blink"
+  | "alarm"
+  | "sleepy"
+  | "curious"
+  | "sad"
+  | "excited";
 
 const FACE: Record<VexMood, string> = {
   happy: "(◕‿◕)",
@@ -103,6 +111,8 @@ const FACE: Record<VexMood, string> = {
   alarm: "(⊙︵⊙)",
   sleepy: "(–ᴗ–)ᶻ",
   curious: "(◕.◕)?",
+  sad: "(◕︵◕)",
+  excited: "(☆‿☆)",
 };
 
 const VEX_DEFAULT = 114; // resting chameleon green
@@ -111,6 +121,14 @@ const VEX_DEFAULT = 114; // resting chameleon green
 export function vex(mood: VexMood = "happy", accountName?: string | null): string {
   const code = accountName ? accountColorCode(accountName) : VEX_DEFAULT;
   return fg256(code, `${FACE[mood]}~@`);
+}
+
+/**
+ * Vex appended to an action's result line — she reacts to what just happened.
+ * Empty when piped, so scripted output stays byte-identical (output hygiene).
+ */
+export function vexTag(mood: VexMood = "happy", accountName?: string | null): string {
+  return process.stdout.isTTY ? `  ${vex(mood, accountName)}` : "";
 }
 
 /**

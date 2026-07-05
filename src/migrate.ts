@@ -27,7 +27,7 @@ import {
   activeAccountName,
   writeActive,
 } from "./store";
-import { bold, dim, green, yellow, red } from "./ui";
+import { bold, dim, green, yellow, red, vexTag } from "./ui";
 
 /**
  * Commands that must never trigger the interactive migration: the cd-hook
@@ -114,6 +114,6 @@ function runMigration(accounts: Accounts, cfg: Config) {
   if (active && cur) writeActive(active, cur);
 
   console.log(green("done"));
-  console.log(`${green("✓")} ${bold("You're good to go.")}`);
+  console.log(`${green("✓")} ${bold("You're good to go.")}${vexTag("happy")}`);
   console.log();
 }
