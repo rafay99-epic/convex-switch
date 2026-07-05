@@ -10,6 +10,20 @@ You link a project folder to an account **once**. After that, the moment you
 terminals — each grabs its own account as it launches and they all run at the
 same time.
 
+```
+      __.--.__
+    .'  o     '-._
+    \             '-.___,
+     \   __    __      _)
+      `-'  `--'  `---'(@
+```
+
+Meet **Vex**, the account chameleon. A chameleon changes color to match its
+surroundings; cvx changes your account to match your project. In `cvx status`
+Vex wears the active account's color — every account gets a stable color of
+its own, used across `accounts`, `ls`, and switch messages, so you learn to
+recognize where you are at a glance.
+
 ## Purpose
 
 The Convex CLI only remembers **one** logged-in account at a time — it lives in
@@ -212,8 +226,9 @@ a single binary, so the split costs nothing at build time.
 bin/cvx.ts        entry point + command dispatch
 src/paths.ts      the ONE place HOME is resolved (CVX_HOME sandbox support)
 src/store.ts      data layer: vault I/O, the config swap, token verify
-src/ui.ts         the logo banner, first-run welcome, help
-src/colors.ts     the palette (edit here to re-theme)
+src/ui.ts         the gradient logo, Vex the mascot, welcome, help
+src/colors.ts     the palette: brand gradient + per-account colors (re-theme here)
+src/spinner.ts    braille spinner for network waits (TTY only)
 src/commands.ts   one function per subcommand
 src/hooks.ts      zsh / bash / PowerShell shell-hook snippets
 src/keychain.ts   OS keychain / DPAPI token backends

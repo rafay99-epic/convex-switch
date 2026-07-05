@@ -65,6 +65,19 @@ authored by the repo owner, full stop.
 - Anything touching `verifyToken` hits the network; tests only assert on its
   error paths and must tolerate both online (401) and offline messages.
 
+## Output hygiene (colors / mascot / spinners)
+
+- Piped output must stay byte-identical to plain text: colors gate on
+  `stdout.isTTY && !NO_COLOR` (colors.ts), the mascot prints only when
+  `process.stdout.isTTY`, and the spinner (spinner.ts) prints nothing until
+  `stop(finalLine)` when not on a TTY. Never `process.stdout.write` animation
+  frames outside spinner.ts.
+- `which`, `prompt`, `accounts --names`, and `status --json` are scripting
+  surfaces — no decoration, ever.
+- Pad-then-colorize (`accountColor(name, name.padEnd(14))`) — colorizing before
+  padEnd breaks column alignment because ANSI codes count as characters.
+- No spinners or new work on the cd-hook hot path (`activate`, `prompt`).
+
 ## Architecture notes worth knowing
 
 - `src/paths.ts` is the ONLY place `HOME` is resolved (that's what makes

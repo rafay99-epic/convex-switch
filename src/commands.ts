@@ -43,7 +43,21 @@ import {
   projectEnv,
 } from "./store";
 import { vaultInitialized, vaultLocked, initVault, destroyVaultMeta, unlock, lock } from "./vault";
-import { bold, dim, green, yellow, red, cyan, die, teamLabel, askHidden } from "./ui";
+import {
+  bold,
+  dim,
+  green,
+  yellow,
+  red,
+  cyan,
+  die,
+  teamLabel,
+  askHidden,
+  accountColor,
+  mascot,
+  mascotWink,
+} from "./ui";
+import { spin } from "./spinner";
 import { parseFlags } from "./args";
 
 // --- small helpers ----------------------------------------------------------
@@ -134,13 +148,13 @@ export async function cmdAdd(args: string[]) {
     console.log(dim(`Using the token currently in ~/.convex/config.json`));
   }
 
-  process.stdout.write("Verifying with Convex… ");
+  const sp = spin("Verifying with Convex… ");
   let teams: Team[] = [];
   try {
     teams = await verifyToken(token);
-    console.log(green("ok"));
+    sp.stop(`Verifying with Convex… ${green("ok")}`);
   } catch (e) {
-    console.log(red("failed"));
+    sp.stop(`Verifying with Convex… ${red("failed")}`);
     die(String((e as Error).message));
   }
 
@@ -165,7 +179,7 @@ export async function cmdAdd(args: string[]) {
   if (token === currentConvexToken()) writeActive(name, token);
 
   const where = backend === "file" ? "" : dim(` (${backendLabel(backend)})`);
-  console.log(`${green("✓")} Stored account ${bold(name)} ${teamLabel(accounts[name])}${where}`);
+  console.log(`${green("✓")} Stored account ${accountColor(name)} ${teamLabel(accounts[name])}${where}`);
   console.log(dim(`  Next: cd into a project and run  ${bold(`cvx link ${name}`)}`));
 }
 
@@ -236,7 +250,7 @@ export function cmdLink(args: string[]) {
   links[target] = account;
   writeLinks(links);
   console.log(
-    `${green("✓")} Linked ${bold(shortPath(target))} → ${bold(account)} ${teamLabel(acc)}`,
+    `${green("✓")} Linked ${bold(shortPath(target))} → ${accountColor(account)} ${teamLabel(acc)}`,
   );
 }
 
@@ -355,7 +369,7 @@ export function cmdActivate(args: string[]) {
       const cur = currentConvexToken();
       if (cur != null && activeMarkerMatches(link.account, cur)) {
         if (!quiet)
-          console.log(`${green("●")} ${bold(link.account)} ${teamLabel(acc)} ${dim("(already active)")}`);
+          console.log(`${green("●")} ${accountColor(link.account)} ${teamLabel(acc)} ${dim("(already active)")}`);
         return;
       }
     }
@@ -375,12 +389,12 @@ export function cmdActivate(args: string[]) {
     if (currentConvexToken() === token) {
       writeActive(link.account, token);
       if (!quiet)
-        console.log(`${green("●")} ${bold(link.account)} ${teamLabel(acc)} ${dim("(already active)")}`);
+        console.log(`${green("●")} ${accountColor(link.account)} ${teamLabel(acc)} ${dim("(already active)")}`);
       return;
     }
     setConvexToken(token);
     writeActive(link.account, token);
-    console.log(`${cyan("⇄")} convex account → ${bold(link.account)} ${teamLabel(acc)}`);
+    console.log(`${cyan("⇄")} convex account → ${accountColor(link.account)} ${teamLabel(acc)}`);
   } catch (e) {
     if (!quiet) console.error(red("cvx: ") + (e as Error).message);
   }
@@ -395,7 +409,7 @@ function activateByName(name: string, acc: Account) {
   }
   setConvexToken(token);
   writeActive(name, token);
-  console.log(`${cyan("⇄")} convex account → ${bold(name)} ${teamLabel(acc)}`);
+  console.log(`${cyan("⇄")} convex account → ${accountColor(name)} ${teamLabel(acc)}`);
 }
 
 /**
@@ -480,8 +494,9 @@ export function cmdStatus(args: string[] = []) {
     return;
   }
 
+  if (process.stdout.isTTY) console.log(mascot(active) + "\n");
   console.log(bold("Active convex account:"));
-  if (active) console.log(`  ${green("●")} ${bold(active)} ${teamLabel(accounts[active])}`);
+  if (active) console.log(`  ${green("●")} ${accountColor(active)} ${teamLabel(accounts[active])}`);
   else if (loggedIn)
     console.log(`  ${yellow("●")} unknown login ${dim("(run `cvx add <name>` to name it)")}`);
   else console.log(`  ${dim("(not logged in)")}`);
@@ -516,7 +531,7 @@ export function cmdAccounts(args: string[] = []) {
     const store = acc.keychain ? dim("· keychain") : acc.enc || acc.pw ? dim("· encrypted") : "";
     const age = ago(acc.verifiedAt);
     console.log(
-      `  ${dot} ${bold(name.padEnd(14))} ${teamLabel(acc)} ${store}${age ? dim(` · verified ${age}`) : ""}`,
+      `  ${dot} ${accountColor(name, name.padEnd(14))} ${teamLabel(acc)} ${store}${age ? dim(` · verified ${age}`) : ""}`,
     );
   }
 }
@@ -530,7 +545,7 @@ export function cmdLs() {
   console.log(bold("Linked projects:"));
   for (const [path, account] of entries.sort()) {
     const marker = path === here ? cyan("→") : " ";
-    console.log(`  ${marker} ${bold(account.padEnd(14))} ${shortPath(path)}`);
+    console.log(`  ${marker} ${accountColor(account, account.padEnd(14))} ${shortPath(path)}`);
   }
 }
 
@@ -828,18 +843,19 @@ export async function cmdDoctor(args: string[] = []) {
         healthy = false;
         continue;
       }
+      const sp = spin(`  checking ${name}…`);
       try {
         await verifyToken(t);
         const age = ago(acc.verifiedAt);
-        console.log(
-          `  ${green("✓")} ${bold(name.padEnd(14))} ${dim("valid")}${age ? dim(` · last verified ${age}`) : ""}`,
+        sp.stop(
+          `  ${green("✓")} ${accountColor(name, name.padEnd(14))} ${dim("valid")}${age ? dim(` · last verified ${age}`) : ""}`,
         );
         acc.verifiedAt = new Date().toISOString();
         verifiedAny = true;
       } catch (e) {
         const msg = String((e as Error).message);
         const offline = /reach Convex|timed out/.test(msg);
-        console.log(
+        sp.stop(
           `  ${offline ? yellow("!") : red("✗")} ${bold(name.padEnd(14))} ${offline ? dim("couldn't check (offline)") : red(msg)}`,
         );
         if (!offline) {
@@ -852,7 +868,11 @@ export async function cmdDoctor(args: string[] = []) {
   }
 
   console.log();
-  console.log(healthy ? green("Everything looks good.") : yellow("Some checks need attention (see above)."));
+  console.log(
+    healthy
+      ? green("Everything looks good.") + "  " + mascotWink()
+      : yellow("Some checks need attention (see above)."),
+  );
   if (!healthy) process.exitCode = 1;
 }
 
