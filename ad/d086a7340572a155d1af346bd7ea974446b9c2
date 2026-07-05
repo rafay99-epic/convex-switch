@@ -1,0 +1,25 @@
+src/ui.ts
+  s_d679e3b5467c5a::t_a1736dabcd8147 146,148-149
+  s_d679e3b5467c5a::t_c587714ec48f04 92-106,110-111,113,116-141
+README.md
+  s_d679e3b5467c5a::t_1d93b7ed27e6e3 14-17,21-24
+src/commands.ts
+  s_d679e3b5467c5a::t_9dd24a4b2104e5 57-58,96-97,99-105,403-404,510-514,889
+  s_d679e3b5467c5a::t_bbce5e43da3125 504-509
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "add086a7340572a155d1af346bd7ea974446b9c2",
+  "prompts": {},
+  "sessions": {
+    "s_d679e3b5467c5a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e026300c-e577-40d9-8080-e0f2676d989b",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
