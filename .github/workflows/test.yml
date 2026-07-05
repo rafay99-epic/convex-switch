@@ -15,6 +15,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
+      - name: TEMP windows diagnostics (remove before merge)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: bun scripts/ci-windiag.ts
       - run: bun test
       - name: release-style build compiles
         shell: bash
