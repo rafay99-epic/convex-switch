@@ -7,7 +7,7 @@
 // Subcommands that take an account name as their first argument.
 const ACCOUNT_CMDS = "link rm rename run refresh use";
 const SUBCOMMANDS =
-  "login add link unlink rm rename activate use run open status accounts ls which prompt refresh doctor hook completions keychain vault export import upgrade welcome version help";
+  "login add link unlink rm rename activate use scan run open status accounts ls which prompt refresh doctor hook completions keychain vault export import upgrade welcome version help";
 
 const ZSH = `#compdef cvx
 _cvx() {
@@ -24,7 +24,7 @@ _cvx() {
         _accts=(\${(f)"\$(cvx accounts --names 2>/dev/null)"})
         _describe -t accounts 'account' _accts
       fi ;;
-    unlink|open|which) _files -/ ;;
+    unlink|open|which|scan) _files -/ ;;
     import|export) _files ;;
     completions) _values 'shell' zsh bash fish powershell ;;
     hook) _values 'shell' zsh bash fish nu powershell ;;
@@ -51,7 +51,7 @@ const BASH = `_cvx() {
     hook) COMPREPLY=( \$(compgen -W "zsh bash fish nu powershell --install --shell" -- "\$cur") ) ;;
     keychain) COMPREPLY=( \$(compgen -W "status enable disable" -- "\$cur") ) ;;
     vault) COMPREPLY=( \$(compgen -W "status encrypt decrypt unlock lock" -- "\$cur") ) ;;
-    unlink|open|which) COMPREPLY=( \$(compgen -d -- "\$cur") ) ;;
+    unlink|open|which|scan) COMPREPLY=( \$(compgen -d -- "\$cur") ) ;;
     import|export) COMPREPLY=( \$(compgen -f -- "\$cur") ) ;;
   esac
 }

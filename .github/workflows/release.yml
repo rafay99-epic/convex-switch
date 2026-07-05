@@ -20,6 +20,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write # build-provenance attestation
+  attestations: write
 
 concurrency:
   group: release
@@ -64,6 +66,16 @@ jobs:
           build linux-arm64  linux  arm64 cvx     cvx.1
           build windows-x64  win32  x64   cvx.exe          # Windows (no man page)
           ( cd dist && shasum -a 256 *.tar.gz | tee checksums.txt )
+
+      # Signed build provenance for every artifact: `gh attestation verify
+      # <tarball> --repo rafay99-epic/cvx` proves it was built by this
+      # workflow from this commit — these binaries handle credentials.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/checksums.txt
 
       - name: Publish GitHub release
         env:

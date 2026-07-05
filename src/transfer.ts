@@ -21,7 +21,7 @@ import {
   type Links,
 } from "./store";
 import { parseFlags } from "./args";
-import { die, bold, dim, green, yellow, askHidden } from "./ui";
+import { die, bold, dim, green, yellow, askHidden, vexTag } from "./ui";
 
 // An account travels with its token RESOLVED inline, so a keychain-backed record
 // still imports portably on a machine that has never seen the original keychain.
@@ -101,7 +101,7 @@ export async function cmdExport(args: string[]) {
   const nLinks = Object.keys(readLinks()).length;
   console.log(
     `${green("✓")} Exported ${bold(String(nAcc))} account${nAcc === 1 ? "" : "s"} and ` +
-      `${bold(String(nLinks))} link${nLinks === 1 ? "" : "s"} to ${bold(file)}`,
+      `${bold(String(nLinks))} link${nLinks === 1 ? "" : "s"} to ${bold(file)}${vexTag("happy")}`,
   );
   console.log(
     yellow(`  ⚠ This file holds LIVE credentials — keep it secret and delete it after importing.`),
@@ -167,7 +167,7 @@ export async function cmdImport(args: string[]) {
 
   console.log(
     `${green("✓")} Import complete: ${bold(String(added))} added, ` +
-      `${bold(String(overwritten))} overwritten, ${bold(String(skipped))} skipped.`,
+      `${bold(String(overwritten))} overwritten, ${bold(String(skipped))} skipped.${vexTag("happy")}`,
   );
   console.log(dim(`  Links: ${linksMerged} merged, ${linksKept} kept.`));
 }

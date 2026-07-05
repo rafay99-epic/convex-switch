@@ -72,6 +72,10 @@ authored by the repo owner, full stop.
   `process.stdout.isTTY`, and the spinner (spinner.ts) prints nothing until
   `stop(finalLine)` when not on a TTY. Never `process.stdout.write` animation
   frames outside spinner.ts.
+- Action result lines get Vex's reaction via `vexTag(mood, account?)` from
+  ui.ts — it returns "" when piped, so it is the ONLY sanctioned way to put
+  her on a command's output. Never concatenate `vex(...)` into output without
+  a TTY gate.
 - `which`, `prompt`, `accounts --names`, and `status --json` are scripting
   surfaces — no decoration, ever.
 - Pad-then-colorize (`accountColor(name, name.padEnd(14))`) — colorizing before

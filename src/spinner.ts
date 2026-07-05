@@ -1,20 +1,21 @@
 /**
- * spinner — a braille spinner for network waits (verify, doctor). On a real
- * terminal it animates in place; piped/scripted output gets exactly the same
- * static text as before, so nothing that parses cvx output ever sees a frame.
- * Never used on the cd-hook hot path.
+ * spinner — Vex works while you wait: tail wags, occasional blink. Used for
+ * network waits (verify, doctor). On a real terminal she animates in place;
+ * piped/scripted output prints nothing until stop, then exactly the final
+ * line — identical to the pre-spinner output. Never used on the cd-hook hot
+ * path.
  */
 
-import { c, dim } from "./colors";
+import { dim, fg256 } from "./colors";
 
-const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+// Tail wag + a blink every full cycle. 114 = Vex's resting green.
+const FRAMES = ["(◕‿◕)~@", "(◕‿◕)∿@", "(◕‿◕)~@", "(–‿–)∿@"];
 
 export type Spinner = { stop(finalLine: string): void };
 
 /**
  * Animate `label` until stop(finalLine) replaces the whole line with
- * `finalLine`. Piped/scripted output prints nothing until stop, then exactly
- * `finalLine` — identical to the pre-spinner output.
+ * `finalLine`.
  */
 export function spin(label: string): Spinner {
   if (!process.stdout.isTTY || process.env.NO_COLOR) {
@@ -22,9 +23,10 @@ export function spin(label: string): Spinner {
   }
   let i = 0;
   process.stdout.write("\x1b[?25l"); // hide cursor
-  const draw = () => process.stdout.write(`\r${c("36", FRAMES[i++ % FRAMES.length])} ${dim(label)}`);
+  const draw = () =>
+    process.stdout.write(`\r${fg256(114, FRAMES[i++ % FRAMES.length])} ${dim(label)}`);
   draw();
-  const timer = setInterval(draw, 80);
+  const timer = setInterval(draw, 140);
   return {
     stop(finalLine) {
       clearInterval(timer);

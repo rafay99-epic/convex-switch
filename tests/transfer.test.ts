@@ -2,6 +2,9 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { statSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
+// Unix file-mode bits (0600) aren't meaningful on Windows.
+const WIN = process.platform === "win32";
+
 // The preload (tests/preload.ts) bound CVX_HOME to a throwaway sandbox before
 // any test file loaded — use THAT, never a private mkdtemp.
 const SANDBOX = process.env.CVX_HOME!;
@@ -65,7 +68,8 @@ describe("packVault / unpackVault", () => {
 describe("cmdExport", () => {
   test("writes a 0600 file with tokens resolved inline", async () => {
     await transfer.cmdExport([EXPORT_FILE]);
-    expect(statSync(EXPORT_FILE).mode & 0o777).toBe(0o600);
+    // Unix file-mode bits are meaningless on Windows — skip just this assertion.
+    if (!WIN) expect(statSync(EXPORT_FILE).mode & 0o777).toBe(0o600);
     const outer = JSON.parse(readFileSync(EXPORT_FILE, "utf8"));
     expect(outer.kind).toBe("cvx-export");
     // The written file, once unpacked, carries the plain tokens.

@@ -66,6 +66,9 @@ class Cvx < Formula
   def install
     bin.install "cvx"
     man1.install "cvx.1"
+    # Tab completion out of the box: runs \`cvx completions <shell>\` at
+    # install time and places each script where the shell expects it.
+    generate_completions_from_executable(bin/"cvx", "completions", shells: [:zsh, :bash, :fish])
   end
 
   def caveats

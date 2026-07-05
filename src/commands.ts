@@ -1,6 +1,6 @@
 /** commands — one function per subcommand. Glue between store + ui. */
 
-import { existsSync, statSync, readFileSync, appendFileSync, mkdirSync } from "node:fs";
+import { existsSync, statSync, readFileSync, readdirSync, appendFileSync, mkdirSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createInterface } from "node:readline/promises";
@@ -55,6 +55,7 @@ import {
   askHidden,
   accountColor,
   vex,
+  vexTag,
   type VexMood,
 } from "./ui";
 import { spin } from "./spinner";
@@ -185,7 +186,9 @@ export async function cmdAdd(args: string[]) {
   if (token === currentConvexToken()) writeActive(name, token);
 
   const where = backend === "file" ? "" : dim(` (${backendLabel(backend)})`);
-  console.log(`${green("✓")} Stored account ${accountColor(name)} ${teamLabel(accounts[name])}${where}`);
+  console.log(
+    `${green("✓")} Stored account ${accountColor(name)} ${teamLabel(accounts[name])}${where}${vexTag("happy", name)}`,
+  );
   console.log(dim(`  Next: cd into a project and run  ${bold(`cvx link ${name}`)}`));
 }
 
@@ -226,7 +229,7 @@ export async function cmdRefresh(args: string[]) {
       console.log(`\n${cyan(`[${i + 1}/${names.length}]`)} ${bold(name)}`);
       await loginAndStore(name, `Sign into ${bold(name)} in the browser…`);
     }
-    console.log(`\n${green("✓")} All accounts refreshed.`);
+    console.log(`\n${green("✓")} All accounts refreshed.${vexTag("excited")}`);
     return;
   }
   const name = flags._[0];
@@ -256,7 +259,7 @@ export function cmdLink(args: string[]) {
   links[target] = account;
   writeLinks(links);
   console.log(
-    `${green("✓")} Linked ${bold(shortPath(target))} → ${accountColor(account)} ${teamLabel(acc)}`,
+    `${green("✓")} Linked ${bold(shortPath(target))} → ${accountColor(account)} ${teamLabel(acc)}${vexTag("happy", account)}`,
   );
 }
 
@@ -266,7 +269,7 @@ export function cmdUnlink(args: string[]) {
   if (!links[target]) die(`No link at ${shortPath(target)}`);
   delete links[target];
   writeLinks(links);
-  console.log(`${green("✓")} Unlinked ${bold(shortPath(target))}`);
+  console.log(`${green("✓")} Unlinked ${bold(shortPath(target))}${vexTag("sad")}`);
 }
 
 export function cmdRename(args: string[]) {
@@ -314,7 +317,7 @@ export function cmdRename(args: string[]) {
     writeActive(newName, movedToken ?? tokenOf(newName, accounts[newName]) ?? undefined);
 
   console.log(
-    `${green("✓")} Renamed ${bold(oldName)} → ${bold(newName)}${moved ? dim(` (${moved} link(s) updated)`) : ""}`,
+    `${green("✓")} Renamed ${bold(oldName)} → ${accountColor(newName)}${moved ? dim(` (${moved} link(s) updated)`) : ""}${vexTag("happy", newName)}`,
   );
 }
 
@@ -339,7 +342,7 @@ export function cmdRm(args: string[]) {
     }
   writeLinks(links);
   console.log(
-    `${green("✓")} Removed account ${bold(name)}${removed ? dim(` (and ${removed} link(s))`) : ""}`,
+    `${green("✓")} Removed account ${bold(name)}${removed ? dim(` (and ${removed} link(s))`) : ""}${vexTag("sad")}`,
   );
 }
 
@@ -400,8 +403,9 @@ export function cmdActivate(args: string[]) {
     }
     setConvexToken(token);
     writeActive(link.account, token);
-    const face = process.stdout.isTTY ? `  ${vex("happy", link.account)}` : "";
-    console.log(`${cyan("⇄")} convex account → ${accountColor(link.account)} ${teamLabel(acc)}${face}`);
+    console.log(
+      `${cyan("⇄")} convex account → ${accountColor(link.account)} ${teamLabel(acc)}${vexTag("happy", link.account)}`,
+    );
   } catch (e) {
     if (!quiet) console.error(red("cvx: ") + (e as Error).message);
   }
@@ -416,7 +420,9 @@ function activateByName(name: string, acc: Account) {
   }
   setConvexToken(token);
   writeActive(name, token);
-  console.log(`${cyan("⇄")} convex account → ${accountColor(name)} ${teamLabel(acc)}`);
+  console.log(
+    `${cyan("⇄")} convex account → ${accountColor(name)} ${teamLabel(acc)}${vexTag("happy", name)}`,
+  );
 }
 
 /**
@@ -438,6 +444,30 @@ export async function cmdUse(args: string[]) {
     die(
       `This directory isn't linked to an account.\n  Run ${bold("cvx link <account>")} — or ${bold("cvx use")} in an interactive terminal to pick one.`,
     );
+
+  // Auto-link offer: if this dir's deployment team uniquely identifies a stored
+  // account, offer to activate + link it before falling back to the picker.
+  const detected = projectEnv(process.cwd()).team;
+  if (detected) {
+    const matches = names.filter((n) => accounts[n].teams.some((t) => t.slug === detected));
+    if (matches.length === 1) {
+      const name = matches[0];
+      const yn = await ask(
+        `Detected team ${bold(detected)} → account ${accountColor(name)}. Activate and link this directory? [Y/n] `,
+      );
+      if (yn === "" || /^y(es)?$/i.test(yn)) {
+        activateByName(name, accounts[name]);
+        const here = canon(process.cwd());
+        const links = readLinks();
+        links[here] = name;
+        writeLinks(links);
+        console.log(
+          `${green("✓")} Linked ${bold(shortPath(here))} → ${accountColor(name)} ${dim("— auto-switches from now on.")}`,
+        );
+        return;
+      }
+    }
+  }
 
   // fzf when available, numbered fallback otherwise. An fzf cancel (Esc /
   // Ctrl-C) cancels the command — it must not fall through to the other picker.
@@ -640,6 +670,147 @@ export function cmdOpen(args: string[] = []) {
   if (!openUrl(url)) die(`Couldn't open a browser. Visit: ${cyan(url)}`);
 }
 
+// --- scan (auto-link discovery) ---------------------------------------------
+
+/** Does this dir's OWN .env.local declare a CONVEX_DEPLOYMENT? (No walk-up —
+ *  projectEnv walks up, so we gate on the file living right here first.) */
+function isProjectDir(dir: string): boolean {
+  const envFile = join(dir, ".env.local");
+  if (!existsSync(envFile)) return false;
+  try {
+    return readFileSync(envFile, "utf8")
+      .split(/\r?\n/)
+      .some((l) => /^\s*CONVEX_DEPLOYMENT\s*=/.test(l));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Collect project dirs under `root` (up to `maxDepth` levels deep), skipping
+ * hidden dirs and node_modules and never descending into a dir that is itself a
+ * project. Symlinked dirs are skipped (isDirectory() is false for them), so the
+ * walk can't loop.
+ */
+function findProjects(root: string, maxDepth: number): string[] {
+  const out: string[] = [];
+  const walk = (dir: string, depth: number) => {
+    if (isProjectDir(dir)) {
+      out.push(dir);
+      return; // a project is a leaf — don't descend into it
+    }
+    if (depth <= 0) return;
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return; // unreadable dir — skip
+    }
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      if (e.name.startsWith(".") || e.name === "node_modules") continue;
+      walk(join(dir, e.name), depth - 1);
+    }
+  };
+  walk(root, maxDepth);
+  return out;
+}
+
+/** scan [dir] — discover Convex projects and propose account links by team. */
+export async function cmdScan(args: string[]) {
+  const flags = parseFlags(args);
+  const accounts = readAccounts();
+  const names = Object.keys(accounts);
+  if (!names.length)
+    die(
+      `No accounts stored yet — nothing to match projects against.\n` +
+        `  Add one first: ${bold("cvx login <name>")}, then re-run ${bold("cvx scan")}.`,
+    );
+
+  const input = flags._[0] ?? process.cwd();
+  const root = resolve(input);
+  if (!existsSync(root) || !statSync(root).isDirectory()) die(`Not a directory: ${input}`);
+
+  let depth = 4;
+  if (typeof flags.depth === "string") {
+    const n = Number.parseInt(flags.depth, 10);
+    if (Number.isFinite(n) && n >= 0) depth = n;
+  }
+
+  const links = readLinks();
+  const proposals: Array<{ dir: string; account: string }> = [];
+  const skips: string[] = [];
+  let already = 0;
+
+  for (const dir of findProjects(root, depth)) {
+    const team = projectEnv(dir).team;
+    if (!team) {
+      skips.push(`  ${dim("•")} ${shortPath(dir)} ${dim("— no team note, skipped")}`);
+      continue;
+    }
+    const matches = names.filter((n) => accounts[n].teams.some((t) => t.slug === team));
+    if (matches.length === 0) {
+      skips.push(`  ${yellow("•")} ${shortPath(dir)} ${dim("— no account for team")} ${bold(team)}`);
+      continue;
+    }
+    if (matches.length > 1) {
+      skips.push(
+        `  ${yellow("•")} ${shortPath(dir)} ${dim(`— team ${team} matches ${matches.length} accounts, skipped`)}`,
+      );
+      continue;
+    }
+    const account = matches[0];
+    const linked = links[canon(dir)];
+    if (linked === account) {
+      already++;
+      continue;
+    }
+    if (linked) {
+      skips.push(
+        `  ${yellow("•")} ${shortPath(dir)} ${dim(`— already linked to ${linked} (team wants ${account}), left as-is`)}`,
+      );
+      continue;
+    }
+    proposals.push({ dir, account });
+  }
+
+  if (skips.length) {
+    console.log(bold("Skipped:"));
+    for (const s of skips) console.log(s);
+  }
+
+  let linked = 0;
+  if (proposals.length) {
+    console.log(bold(`${skips.length ? "\n" : ""}Proposed links:`));
+    const w = Math.max(...proposals.map((p) => p.account.length));
+    for (const p of proposals)
+      console.log(`  ${accountColor(p.account, p.account.padEnd(w))}  ${shortPath(p.dir)}`);
+
+    let proceed: boolean;
+    if (flags.yes) {
+      proceed = true;
+    } else if (process.stdin.isTTY) {
+      const yn = await ask(`\nLink ${proposals.length} project(s)? [Y/n] `);
+      proceed = yn === "" || /^y(es)?$/i.test(yn);
+    } else {
+      console.log(dim(`\nRe-run with ${bold("--yes")} to apply these links.`));
+      die("Refusing to link without confirmation on a non-interactive terminal.");
+    }
+
+    if (!proceed) {
+      console.log(dim("Cancelled — nothing linked."));
+      return;
+    }
+    for (const p of proposals) links[canon(p.dir)] = p.account;
+    writeLinks(links); // one write for the whole batch
+    linked = proposals.length;
+  }
+
+  console.log(
+    `${green("✓")} ${dim("scan:")} linked ${bold(String(linked))}, already ${bold(String(already))}, skipped ${bold(String(skips.length))}.${vexTag(linked ? "happy" : "curious")}`,
+  );
+}
+
 // --- keychain ---------------------------------------------------------------
 
 export function cmdKeychain(args: string[]) {
@@ -667,9 +838,10 @@ export function cmdKeychain(args: string[]) {
     if (cfg.storage === "passphrase") destroyVaultMeta(); // tokens left the encrypted vault
     const n = Object.keys(accounts).length;
     console.log(
-      n
+      (n
         ? `${green("✓")} Moved ${n} account(s) into ${bold(backendLabel(available))}.`
-        : `${green("✓")} Token storage set to ${bold(backendLabel(available))} — new accounts will be stored there.`,
+        : `${green("✓")} Token storage set to ${bold(backendLabel(available))} — new accounts will be stored there.`) +
+        vexTag("happy"),
     );
     return;
   }
@@ -677,7 +849,7 @@ export function cmdKeychain(args: string[]) {
     migrateStorage(accounts, "file");
     writeConfig({ ...cfg, storage: "file" });
     if (cfg.storage === "passphrase") destroyVaultMeta(); // tokens left the encrypted vault
-    console.log(`${green("✓")} Moved tokens back to the file vault (chmod 600).`);
+    console.log(`${green("✓")} Moved tokens back to the file vault (chmod 600).${vexTag("happy")}`);
     return;
   }
   die(`Usage: ${bold("cvx keychain <status|enable|disable>")}`);
@@ -752,7 +924,9 @@ export async function cmdVault(args: string[]) {
     initVault(await newPassphrase());
     migrateStorage(accounts, "passphrase");
     writeConfig({ ...cfg, storage: "passphrase" });
-    console.log(`${green("✓")} Tokens encrypted with your passphrase ${dim("(unlocked for this session)")}.`);
+    console.log(
+      `${green("✓")} Tokens encrypted with your passphrase ${dim("(unlocked for this session)")}.${vexTag("wink")}`,
+    );
     console.log(dim("  `cvx vault lock` locks it; a reboot locks it too."));
     return;
   }
@@ -763,7 +937,7 @@ export async function cmdVault(args: string[]) {
     migrateStorage(readAccounts(), "file");
     writeConfig({ ...cfg, storage: "file" });
     destroyVaultMeta();
-    console.log(`${green("✓")} Tokens moved back to the plain file vault (chmod 600).`);
+    console.log(`${green("✓")} Tokens moved back to the plain file vault (chmod 600).${vexTag("happy")}`);
     return;
   }
 
@@ -771,13 +945,13 @@ export async function cmdVault(args: string[]) {
     if (!vaultInitialized()) die("Vault isn't passphrase-encrypted. Set it up with `cvx vault encrypt`.");
     const pass = process.env.CVX_PASSPHRASE ?? (await askHidden("Passphrase: "));
     if (!unlock(pass)) die("Wrong passphrase.");
-    console.log(`${green("✓")} Vault unlocked for this session.`);
+    console.log(`${green("✓")} Vault unlocked for this session.${vexTag("happy")}`);
     return;
   }
 
   if (sub === "lock") {
     lock();
-    console.log(`${green("✓")} Vault locked. Unlock with ${bold("cvx vault unlock")}.`);
+    console.log(`${green("✓")} Vault locked. Unlock with ${bold("cvx vault unlock")}.${vexTag("sleepy")}`);
     return;
   }
 
@@ -849,7 +1023,9 @@ export async function cmdDoctor(args: string[] = []) {
   );
 
   // Token health — pings Convex for each account (skip with --no-tokens).
-  if (vaultOk && nAcc && !flags["no-tokens"]) {
+  const tokenChecks = vaultOk && !!nAcc && !flags["no-tokens"];
+  const rejected: string[] = []; // tokens Convex refused (not merely offline)
+  if (tokenChecks) {
     console.log(bold("\nToken health:"));
     let verifiedAny = false;
     for (const [name, acc] of Object.entries(accounts)) {
@@ -875,18 +1051,81 @@ export async function cmdDoctor(args: string[] = []) {
           `  ${offline ? yellow("!") : red("✗")} ${bold(name.padEnd(14))} ${offline ? dim("couldn't check (offline)") : red(msg)}`,
         );
         if (!offline) {
-          healthy = false;
-          console.log(dim(`      → re-authenticate with  cvx refresh ${name}`));
+          // With --fix we offer to re-auth below, so defer the verdict; without
+          // it, this is an unfixed problem right now.
+          rejected.push(name);
+          if (!flags.fix) {
+            healthy = false;
+            console.log(dim(`      → re-authenticate with  cvx refresh ${name}`));
+          }
         }
       }
     }
     if (verifiedAny) writeAccounts(accounts); // persist fresh verifiedAt stamps
   }
 
+  // --fix: apply repairs. Fixed problems no longer force a non-zero exit;
+  // unfixed real problems still do.
+  if (flags.fix) {
+    console.log(bold("\nApplying fixes:"));
+    let fixedAny = false;
+    const fixed = (msg: string) => {
+      fixedAny = true;
+      console.log(`  ${green("↳")} fixed: ${msg}`);
+    };
+
+    // Shell hook missing → install it for the detected shell.
+    if (!hooked) {
+      const shell = detectShell();
+      if (shell === "powershell") {
+        installPwsh(hookFor("powershell"));
+        fixed("installed the PowerShell cd-hook");
+      } else if (installHookInto(shell)) {
+        fixed(`installed the ${shell} cd-hook into ${shortPath(join(HOME, RC_FILES[shell]))}`);
+      }
+    }
+
+    // Dead links → prune every links.json path that no longer exists (one write).
+    if (linksOk) {
+      const links = readLinks();
+      const dead = Object.keys(links).filter((p) => !existsSync(p));
+      if (dead.length) {
+        for (const p of dead) delete links[p];
+        writeLinks(links);
+        for (const p of dead) fixed(`pruned dead link ${shortPath(p)}`);
+      }
+    }
+
+    // Stale active marker → the named account is gone; clear it.
+    const marked = readActive();
+    if (vaultOk && marked && !accounts[marked]) {
+      clearActive();
+      fixed(`cleared stale active marker (${marked})`);
+    }
+
+    // Dead tokens → offer a per-account re-auth (only when token checks ran).
+    for (const name of rejected) {
+      if (process.stdin.isTTY) {
+        const yn = await ask(`Re-authenticate ${bold(name)} now? [y/N] `);
+        if (/^y(es)?$/i.test(yn)) {
+          await loginAndStore(name, `Re-authenticating ${bold(name)} — sign into that account in the browser…`);
+          fixed(`re-authenticated ${name}`);
+          continue;
+        }
+      } else {
+        console.log(dim(`      → re-authenticate with  cvx refresh ${name}`));
+      }
+      healthy = false; // declined or non-interactive — still a live problem
+    }
+
+    if (!fixedAny) console.log(dim("  nothing to fix."));
+  }
+
   console.log();
   console.log(
     healthy
-      ? green("Everything looks good.") + "  " + dim("~ Vex approves ") + vex("wink") + dim(" ~")
+      ? green("Everything looks good.") +
+          (process.stdout.isTTY ? "  " + dim("~ Vex approves ") + vex("wink") + dim(" ~") : "")
       : yellow("Some checks need attention (see above)."),
   );
   if (!healthy) process.exitCode = 1;
@@ -920,15 +1159,26 @@ export function cmdHook(args: string[]) {
   if (shell === "powershell") return installPwsh(snippet);
 
   const rc = join(HOME, RC_FILES[shell]);
-  const body = existsSync(rc) ? readFileSync(rc, "utf8") : "";
-  if (body.includes(HOOK_MARKER)) {
+  if (installHookInto(shell)) {
+    console.log(`${green("✓")} Added hook to ${cyan(shortPath(rc))}.${vexTag("happy")}`);
+    console.log(dim(`  Open a new terminal to activate it.`));
+  } else {
     console.log(yellow(`Hook already present in ${shortPath(rc)} — nothing to do.`));
-    return;
   }
+}
+
+/**
+ * Append the cd-hook to `shell`'s rc file. Returns true if newly added, false
+ * if it was already present. Shared by `cvx hook --install` and `doctor --fix`
+ * (powershell has no fixed rc path — it uses installPwsh instead).
+ */
+function installHookInto(shell: Exclude<Shell, "powershell">): boolean {
+  const rc = join(HOME, RC_FILES[shell]);
+  const body = existsSync(rc) ? readFileSync(rc, "utf8") : "";
+  if (body.includes(HOOK_MARKER)) return false;
   mkdirSync(dirname(rc), { recursive: true });
-  appendFileSync(rc, "\n" + snippet);
-  console.log(`${green("✓")} Added hook to ${cyan(shortPath(rc))}.`);
-  console.log(dim(`  Open a new terminal to activate it.`));
+  appendFileSync(rc, "\n" + hookFor(shell));
+  return true;
 }
 
 function installPwsh(snippet: string) {
@@ -951,6 +1201,6 @@ function installPwsh(snippet: string) {
   }
   mkdirSync(dirname(profile), { recursive: true });
   appendFileSync(profile, "\n" + snippet);
-  console.log(`${green("✓")} Added hook to ${cyan(profile)}.`);
+  console.log(`${green("✓")} Added hook to ${cyan(profile)}.${vexTag("happy")}`);
   console.log(dim("  Open a new PowerShell window to activate it."));
 }

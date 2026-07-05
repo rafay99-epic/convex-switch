@@ -18,7 +18,12 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
+
+// Gates the handful of assertions/flows that are genuinely POSIX-only (file
+// modes, shell stubs) so the rest of the suite still runs — and is asserted
+// on — under Windows CI.
+const WIN = process.platform === "win32";
 
 const ROOT = join(import.meta.dir, "..");
 const BIN = join(ROOT, "bin", "cvx.ts");
@@ -88,7 +93,9 @@ describe("basics", () => {
     expect(r.code).toBe(1);
     expect(r.err).toContain("Unknown command");
   });
-  test("vault dir is 700, files are 600", () => {
+  // Unix file-mode bits (700/600) aren't meaningful on Windows — there's no
+  // POSIX permission model to assert against there.
+  test.skipIf(WIN)("vault dir is 700, files are 600", () => {
     expect(statSync(join(HOME, ".convex-switch")).mode & 0o777).toBe(0o700);
     expect(statSync(ACCOUNTS).mode & 0o777).toBe(0o600);
   });
@@ -167,10 +174,21 @@ describe("activate / status / prompt / accounts", () => {
 describe("run", () => {
   test("passes the token via env and propagates the exit code", () => {
     seedAccounts();
-    const r = cvx(["run", "work", "--", "/bin/sh", "-c", "echo T=$CONVEX_OVERRIDE_ACCESS_TOKEN"]);
+    // Run the Bun binary itself instead of /bin/sh -c "..." — a platform-neutral
+    // stand-in for "some child process" that works identically on Windows.
+    // The inline script must contain NO SPACES: cmdRun spawns with shell:true
+    // on Windows (to resolve .cmd shims), so cmd.exe re-splits joined args.
+    const r = cvx([
+      "run",
+      "work",
+      "--",
+      process.execPath,
+      "-e",
+      "console.log('T='+process.env.CONVEX_OVERRIDE_ACCESS_TOKEN)",
+    ]);
     expect(r.code).toBe(0);
     expect(r.out).toContain("T=tok-work-AAA");
-    expect(cvx(["run", "work", "--", "/bin/sh", "-c", "exit 7"]).code).toBe(7);
+    expect(cvx(["run", "work", "--", process.execPath, "-e", "process.exit(7)"]).code).toBe(7);
   });
   test("errors: no command / unknown account", () => {
     expect(cvx(["run", "work"]).code).toBe(1);
@@ -419,8 +437,11 @@ describe("refresh --all / help", () => {
   });
 });
 
-describe("open (stubbed opener — never launches a browser)", () => {
-  const env = { PATH: `${STUB_BIN}:/usr/bin:/bin` };
+// Windows opens URLs via `cmd /c start`, not an `open`/`xdg-open` binary on
+// PATH — stubbing cmd.exe itself isn't safe (it's used for far more than
+// launching a browser), so this whole flow is untestable headlessly there.
+describe.skipIf(WIN)("open (stubbed opener — never launches a browser)", () => {
+  const env = { PATH: `${STUB_BIN}${delimiter}/usr/bin${delimiter}/bin` };
   test("prints the deployment URL when the opener fails", () => {
     writeFileSync(join(PROJ, ".env.local"), "CONVEX_DEPLOYMENT=dev:happy-otter-123\n");
     const r = cvx(["open", PROJ], { env });
@@ -432,5 +453,94 @@ describe("open (stubbed opener — never launches a browser)", () => {
     const r = cvx(["open", PROJ], { env });
     expect(r.all).not.toContain("evil");
     expect(r.err).toContain("https://dashboard.convex.dev");
+  });
+});
+
+describe("scan (auto-link discovery)", () => {
+  const scanroot = join(HOME, "scanroot");
+  const A = join(scanroot, "a");
+  const B = join(scanroot, "b");
+  const C = join(scanroot, "c");
+  beforeAll(() => {
+    for (const d of [A, B, C]) mkdirSync(d, { recursive: true });
+    // a's team "wt" matches the seeded "work" account; b's "nobody" matches none.
+    writeFileSync(join(A, ".env.local"), "CONVEX_DEPLOYMENT=dev:x-1 # team: wt, project: p\n");
+    writeFileSync(join(B, ".env.local"), "CONVEX_DEPLOYMENT=dev:y-1 # team: nobody\n");
+    // c has no .env.local — not a project.
+  });
+
+  test("--yes links a→work, reports b as unmatched, ignores c", () => {
+    seedAccounts();
+    const r = cvx(["scan", scanroot, "--yes"]);
+    expect(r.code).toBe(0);
+    expect(cvx(["which", A]).out.trim()).toBe("work");
+    expect(r.all).toContain("nobody");
+    expect(cvx(["which", B]).code).toBe(1); // b never linked
+  });
+
+  test("second run counts a as already-linked and creates nothing new", () => {
+    const r = cvx(["scan", scanroot, "--yes"]);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("already 1");
+    expect(cvx(["which", A]).out.trim()).toBe("work");
+  });
+
+  test("piped scan without --yes exits 1 and links nothing", () => {
+    cvx(["unlink", A]); // a fresh proposal to refuse
+    const r = cvx(["scan", scanroot]);
+    expect(r.code).toBe(1);
+    expect(cvx(["which", A]).code).toBe(1); // still unlinked
+  });
+
+  test("conflict: an existing different link is kept, never overwritten", () => {
+    cvx(["link", "personal", A]);
+    const r = cvx(["scan", scanroot, "--yes"]);
+    expect(r.code).toBe(0);
+    expect(cvx(["which", A]).out.trim()).toBe("personal");
+  });
+
+  test("no accounts stored dies with guidance", () => {
+    writeFileSync(ACCOUNTS, "{}");
+    const r = cvx(["scan", scanroot]);
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("No accounts");
+    seedAccounts();
+  });
+});
+
+describe("doctor --fix", () => {
+  const zshrc = join(HOME, ".zshrc");
+  const deadDir = join(HOME, "gone-proj");
+
+  // detectShell() ignores $SHELL and always returns "powershell" on Windows,
+  // which would route this through installPwsh() — spawning real pwsh and
+  // appending to the CI runner's actual $PROFILE instead of anything sandboxed.
+  test.skipIf(WIN)("prunes dead links and installs the missing shell hook", () => {
+    seedAccounts();
+    rmSync(zshrc, { force: true }); // start with the hook absent
+    mkdirSync(deadDir, { recursive: true });
+    cvx(["link", "work", deadDir]);
+    expect(cvx(["which", deadDir]).out.trim()).toBe("work");
+    rmSync(deadDir, { recursive: true, force: true }); // now the link is dead
+
+    const r = cvx(["doctor", "--fix", "--no-tokens"], { env: { SHELL: "/bin/zsh" } });
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("fixed");
+    expect(readFileSync(LINKS, "utf8")).not.toContain("gone-proj"); // pruned
+    expect(existsSync(zshrc)).toBe(true);
+    expect(readFileSync(zshrc, "utf8")).toContain("convex-switch"); // marker installed
+
+    // second run: hook already there, normal diagnosis shows it installed
+    const r2 = cvx(["doctor", "--fix", "--no-tokens"], { env: { SHELL: "/bin/zsh" } });
+    expect(r2.out).toMatch(/shell hook\s+installed/);
+  });
+
+  test("clears a stale active marker naming a ghost account", () => {
+    seedAccounts();
+    writeFileSync(ACTIVE, "ghost\n");
+    const r = cvx(["doctor", "--fix", "--no-tokens"], { env: { SHELL: "/bin/zsh" } });
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("cleared stale active marker");
+    expect(readFileSync(ACTIVE, "utf8").split("\n")[0]).toBe("");
   });
 });
