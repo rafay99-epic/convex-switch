@@ -1,0 +1,33 @@
+src/ui.ts
+  s_d679e3b5467c5a::t_183bbde5bff472 97-105,114-115,126-131
+  s_d679e3b5467c5a::t_c83b396b4a85a1 132-133
+src/transfer.ts
+  s_d679e3b5467c5a::t_cd8e0029c16ea7 24,104,170
+src/commands.ts
+  s_d679e3b5467c5a::t_cd8e0029c16ea7 1127-1128,1163,1204
+  s_d679e3b5467c5a::t_ce1935adf8b1a7 58,189-191,232,262,272,320,345,406-408,423-425,810,841,843-844,852,927-929,940,948,954
+src/upgrade.ts
+  s_d679e3b5467c5a::t_cd8e0029c16ea7 7,75,79
+src/spinner.ts
+  s_d679e3b5467c5a::t_b26f20f1f84358 2-6,9,11-12,18,26-27,29
+CLAUDE.md
+  s_d679e3b5467c5a::t_51ec435f8d42fd 75-78
+src/migrate.ts
+  s_d679e3b5467c5a::t_cd8e0029c16ea7 30,117
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2f5393ef3ea66bb477387b1dc84f63ecd9578b1a",
+  "prompts": {},
+  "sessions": {
+    "s_d679e3b5467c5a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e026300c-e577-40d9-8080-e0f2676d989b",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
