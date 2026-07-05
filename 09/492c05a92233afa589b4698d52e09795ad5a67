@@ -1,0 +1,61 @@
+src/args.ts
+  s_d679e3b5467c5a::t_f5f33e13075a7f 10
+tests/cli.test.ts
+  s_d679e3b5467c5a::t_e78244f702b886 177-186,189
+  s_d679e3b5467c5a::t_01acc16380c989 513-516
+  s_d679e3b5467c5a::t_993b1ab81e6493 96-98
+  s_d679e3b5467c5a::t_8ad147a6cdb56f 456-512,517-544
+  s_d679e3b5467c5a::t_b5d4fcd908ab8f 21-26
+  s_d679e3b5467c5a::t_72a490fb9ff81c 438-442
+.github/workflows/release.yml
+  s_d679e3b5467c5a::t_7ffa86b783e5fb 23-24
+  s_d679e3b5467c5a::t_78151493782479 70-79
+.github/scripts/bump-formula.sh
+  s_d679e3b5467c5a::t_77be7de90a56cd 69-71
+README.md
+  s_d679e3b5467c5a::t_e4e55b99e577bf 177
+  s_d679e3b5467c5a::t_65d112dbb494db 161
+src/ui.ts
+  s_d679e3b5467c5a::t_993663d50d989e 182
+  s_d679e3b5467c5a::t_fa4ff9843f377a 204
+src/commands.ts
+  s_d679e3b5467c5a::t_b0287d8c4ea9c6 667-807,1113
+  s_d679e3b5467c5a::t_8801523812222a 1017-1019,1045-1051,1058-1112
+  s_d679e3b5467c5a::t_8d01317cadd401 3
+  s_d679e3b5467c5a::t_c5178f9ec9e28d 1152-1155,1158-1168,1170-1171
+  s_d679e3b5467c5a::t_e1e8d7f4a44715 442-465
+  s_d679e3b5467c5a::t_d2c871d0df5d94 1114
+man/cvx.1
+  s_d679e3b5467c5a::t_59bae777283343 43-52
+  s_d679e3b5467c5a::t_79932159f26482 130,134-138
+bin/cvx.ts
+  s_d679e3b5467c5a::t_e9742f0158b9bd 74-75
+  s_d679e3b5467c5a::t_17d769a4370482 24
+tests/transfer.test.ts
+  s_d679e3b5467c5a::t_94492f0c9aa33a 71-72
+  s_d679e3b5467c5a::t_d7fa5a4dc2556b 5-7
+tests/args.test.ts
+  s_d679e3b5467c5a::t_b718b5657e3916 47-52
+src/completions.ts
+  s_d679e3b5467c5a::t_62c33676eeeba0 10
+  s_d679e3b5467c5a::t_3a0965401d963f 27
+  s_d679e3b5467c5a::t_94a42bf7e0f516 54
+.github/workflows/test.yml
+  s_d679e3b5467c5a::t_69ada0e0bcfb7d 10-14,20-23,25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "09492c05a92233afa589b4698d52e09795ad5a67",
+  "prompts": {},
+  "sessions": {
+    "s_d679e3b5467c5a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e026300c-e577-40d9-8080-e0f2676d989b",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
