@@ -21,6 +21,11 @@ function sh(cmd: string, args: string[], input?: string) {
   return spawnSync(cmd, args, { encoding: "utf8", input, timeout: 15000 });
 }
 
+/** The OS keychain a `keychain: true` record's secret lives in on this platform. */
+export function platformKeychain(): Backend {
+  return process.platform === "darwin" ? "macos" : "libsecret";
+}
+
 /** Which OS keychain backend is usable on this machine, if any. */
 export function detectBackend(): Backend {
   if (process.platform === "darwin") {
@@ -33,7 +38,7 @@ export function detectBackend(): Backend {
 
 export function backendLabel(b: Backend): string {
   return {
-    file: "encrypted file (chmod 600)",
+    file: "plain file (chmod 600)",
     macos: "macOS Keychain",
     libsecret: "libsecret (GNOME Keyring / KWallet)",
     dpapi: "Windows DPAPI",
@@ -49,8 +54,9 @@ function macGet(account: string): string | null {
   const r = sh("security", ["find-generic-password", "-a", account, "-s", SERVICE, "-w"]);
   return !r.error && r.status === 0 ? r.stdout.replace(/\n$/, "") : null;
 }
-function macDel(account: string) {
-  sh("security", ["delete-generic-password", "-a", account, "-s", SERVICE]);
+function macDel(account: string): boolean {
+  const r = sh("security", ["delete-generic-password", "-a", account, "-s", SERVICE]);
+  return !r.error && r.status === 0;
 }
 
 // --- Linux (libsecret) -----------------------------------------------------
@@ -66,8 +72,9 @@ function secretGet(account: string): string | null {
   const r = sh("secret-tool", ["lookup", "service", SERVICE, "account", account]);
   return !r.error && r.status === 0 ? r.stdout.replace(/\n$/, "") : null;
 }
-function secretDel(account: string) {
-  sh("secret-tool", ["clear", "service", SERVICE, "account", account]);
+function secretDel(account: string): boolean {
+  const r = sh("secret-tool", ["clear", "service", SERVICE, "account", account]);
+  return !r.error && r.status === 0;
 }
 
 // --- Windows (DPAPI via PowerShell) ----------------------------------------
@@ -133,9 +140,12 @@ export function loadToken(
   return rec.token ?? null;
 }
 
-/** Remove any keychain-side secret for an account (no-op for file/dpapi). */
-export function deleteToken(account: string, rec: { keychain?: boolean }) {
-  if (!rec.keychain) return;
-  if (process.platform === "darwin") macDel(account);
-  else secretDel(account);
+/**
+ * Remove any keychain-side secret for an account (no-op for file/dpapi).
+ * Returns false when a keychain-backed secret could not be deleted, so callers
+ * can warn instead of silently orphaning a live credential.
+ */
+export function deleteToken(account: string, rec: { keychain?: boolean }): boolean {
+  if (!rec.keychain) return true;
+  return process.platform === "darwin" ? macDel(account) : secretDel(account);
 }

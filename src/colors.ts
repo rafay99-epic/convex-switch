@@ -19,8 +19,6 @@ export const green = (s: string) => c("32", s);
 export const yellow = (s: string) => c("33", s);
 export const red = (s: string) => c("31", s);
 export const cyan = (s: string) => c("36", s);
-export const blue = (s: string) => c("34", s);
-export const magenta = (s: string) => c("35", s);
 
 /** Banner logo gradient, top → bottom (256-color codes: cyan → blue). */
 export const BANNER_GRADIENT = [51, 45, 39, 33, 27, 26];

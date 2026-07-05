@@ -70,7 +70,7 @@ async function main() {
     case "run":
       return cmdRun(rest);
     case "open":
-      return cmdOpen();
+      return cmdOpen(rest);
     case "status":
       return cmdStatus(rest);
     case "accounts":

@@ -7,8 +7,23 @@
 
 export type Shell = "zsh" | "bash" | "powershell" | "fish" | "nu";
 
+/**
+ * Sentinel baked into every snippet below (the `--- convex-switch ---` marker
+ * lines). Install and doctor grep startup files for it, so it must match the
+ * snippets' marker text.
+ */
+export const HOOK_MARKER = "convex-switch";
+
+/** Startup file per shell, relative to $HOME. PowerShell has no fixed path — its $PROFILE is resolved at runtime. */
+export const RC_FILES: Record<Exclude<Shell, "powershell">, string> = {
+  zsh: ".zshrc",
+  bash: ".bashrc",
+  fish: ".config/fish/config.fish",
+  nu: ".config/nushell/config.nu",
+};
+
 // zsh: chpwd fires only on a real directory change — cheapest hook.
-export const HOOK_ZSH = `
+const HOOK_ZSH = `
 # --- convex-switch ---------------------------------------------------------
 # Auto-activate the linked Convex account when you cd into a project.
 _convex_switch_hook() { command cvx activate -q 2>/dev/null }
@@ -18,7 +33,7 @@ _convex_switch_hook   # run once for the current directory
 `.trimStart();
 
 // bash: no chpwd, so hook PROMPT_COMMAND and guard on $PWD changing.
-export const HOOK_BASH = `
+const HOOK_BASH = `
 # --- convex-switch ---------------------------------------------------------
 # Auto-activate the linked Convex account when you cd into a project.
 __convex_switch_hook() {
@@ -36,7 +51,7 @@ esac
 
 // PowerShell (native Windows): no chpwd either, so wrap the prompt function
 // once and fire when $PWD changes.
-export const HOOK_PWSH = `
+const HOOK_PWSH = `
 # --- convex-switch ---------------------------------------------------------
 # Auto-activate the linked Convex account when you change directory.
 if (-not $global:__cvx_hooked) {
@@ -55,7 +70,7 @@ if (-not $global:__cvx_hooked) {
 `.trimStart();
 
 // fish: has a native "fire when a variable changes" event for $PWD.
-export const HOOK_FISH = `
+const HOOK_FISH = `
 # --- convex-switch ---------------------------------------------------------
 # Auto-activate the linked Convex account when you cd into a project.
 function __convex_switch_hook --on-variable PWD
@@ -67,7 +82,7 @@ __convex_switch_hook
 
 // Nushell: register a PWD env-change hook. Best-effort — hook syntax varies by
 // Nushell version; tested against recent releases.
-export const HOOK_NU = `
+const HOOK_NU = `
 # --- convex-switch ---------------------------------------------------------
 # Auto-activate the linked Convex account when you change directory.
 $env.config.hooks.env_change.PWD = (

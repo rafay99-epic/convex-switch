@@ -5,9 +5,9 @@ import { join, dirname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 
-import { type Shell, hookFor, detectShell, SHELLS } from "./hooks";
+import { type Shell, hookFor, detectShell, SHELLS, HOOK_MARKER, RC_FILES } from "./hooks";
 import { hasCommand, isWindows, openUrl } from "./system";
-import { type Backend, backendLabel } from "./keychain";
+import { type Backend, backendLabel, platformKeychain } from "./keychain";
 import { completionFor } from "./completions";
 import {
   HOME,
@@ -29,11 +29,14 @@ import {
   shortPath,
   tokenOf,
   makeTokenRecord,
+  withTokenRecord,
+  validAccountName,
   storageBackend,
   detectBackend,
   deleteToken,
   readActive,
   writeActive,
+  activeMarkerMatches,
   clearActive,
   activeAccountName,
   projectDeployment,
@@ -52,6 +55,24 @@ function requireAccount(accounts: Accounts, name: string): Account {
   return acc;
 }
 
+function requireValidName(name: string) {
+  if (!validAccountName(name))
+    die(
+      `Invalid account name ${bold(name)}.\n` +
+        `  Use letters, digits, dots, dashes or underscores, starting with a letter or digit.`,
+    );
+}
+
+/** Warn (don't fail) when an account's OS-keychain secret couldn't be removed. */
+function warnIfSecretLeft(name: string, deleted: boolean) {
+  if (!deleted)
+    console.error(
+      yellow("! ") +
+        `couldn't remove ${bold(name)}'s secret from the OS keychain — ` +
+        `delete the "convex-switch" entry for it manually.`,
+    );
+}
+
 async function ask(question: string): Promise<string> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
@@ -66,7 +87,14 @@ async function ask(question: string): Promise<string> {
 export async function cmdAdd(args: string[]) {
   const flags = parseFlags(args);
   let name = flags._[0];
+  if (flags.token === true) die(`${bold("--token")} needs a value: ${bold("cvx add <name> --token <token>")}`);
   let token: string | null = (flags.token as string) ?? null;
+
+  // Validate a user-supplied NEW name before the network round-trip. Existing
+  // names are grandfathered so `cvx refresh`/`cvx login` keep working for
+  // accounts created before validation existed. Object.hasOwn (not
+  // accounts[name]) so "__proto__" can't sneak past via the prototype.
+  if (name && !Object.hasOwn(readAccounts(), name)) requireValidName(name);
 
   if (!token) {
     token = currentConvexToken();
@@ -89,7 +117,10 @@ export async function cmdAdd(args: string[]) {
     die(String((e as Error).message));
   }
 
-  if (!name) name = teams[0]?.slug ?? "account";
+  if (!name) {
+    const slug = teams[0]?.slug;
+    name = slug && validAccountName(slug) ? slug : "account";
+  }
   const accounts = readAccounts();
   if (accounts[name] && !flags.force)
     die(`Account ${bold(name)} already exists. Use ${bold("--force")} to overwrite.`);
@@ -103,23 +134,16 @@ export async function cmdAdd(args: string[]) {
   }
   accounts[name] = { ...rec, teams, addedAt: new Date().toISOString() };
   writeAccounts(accounts);
-  if (token === currentConvexToken()) writeActive(name);
+  if (token === currentConvexToken()) writeActive(name, token);
 
   const where = backend === "file" ? "" : dim(` (${backendLabel(backend)})`);
   console.log(`${green("✓")} Stored account ${bold(name)} ${teamLabel(accounts[name])}${where}`);
   console.log(dim(`  Next: cd into a project and run  ${bold(`cvx link ${name}`)}`));
 }
 
-export function cmdLogin(args: string[]) {
-  const name = parseFlags(args)._[0];
-  if (!name) die(`Usage: ${bold("cvx login <name>")}`);
-  if (!hasCommand("npx"))
-    die(
-      `${bold("npx")} (Node.js) was not found on your PATH.\n` +
-        `  Convex's CLI runs via npx — install Node from https://nodejs.org and retry.\n` +
-        `  Already logged in elsewhere? Use ${bold(`cvx add ${name}`)} to store the current login.`,
-    );
-  console.log(dim("Opening Convex login (forces a fresh browser sign-in)…"));
+/** Run `npx convex login --force` interactively, then store the result as `name`. */
+function loginAndStore(name: string, banner: string) {
+  console.log(dim(banner));
   const r = spawnSync("npx", ["--yes", "convex", "login", "--force"], {
     stdio: "inherit",
     shell: isWindows,
@@ -127,6 +151,19 @@ export function cmdLogin(args: string[]) {
   if (r.error) die(`Could not run convex login: ${r.error.message}`);
   if (r.status !== 0) die("convex login did not complete.");
   return cmdAdd([name, "--force"]);
+}
+
+export function cmdLogin(args: string[]) {
+  const name = parseFlags(args)._[0];
+  if (!name) die(`Usage: ${bold("cvx login <name>")}`);
+  requireValidName(name);
+  if (!hasCommand("npx"))
+    die(
+      `${bold("npx")} (Node.js) was not found on your PATH.\n` +
+        `  Convex's CLI runs via npx — install Node from https://nodejs.org and retry.\n` +
+        `  Already logged in elsewhere? Use ${bold(`cvx add ${name}`)} to store the current login.`,
+    );
+  return loginAndStore(name, "Opening Convex login (forces a fresh browser sign-in)…");
 }
 
 /** Re-authenticate an existing account (sign in again, refresh its token). */
@@ -137,14 +174,7 @@ export function cmdRefresh(args: string[]) {
   if (!accounts[name])
     die(`Unknown account ${bold(name)}. Use ${bold(`cvx login ${name}`)} to add it.`);
   if (!hasCommand("npx")) die(`${bold("npx")} (Node.js) not found — needed to re-authenticate.`);
-  console.log(dim(`Re-authenticating ${bold(name)} — sign into that account in the browser…`));
-  const r = spawnSync("npx", ["--yes", "convex", "login", "--force"], {
-    stdio: "inherit",
-    shell: isWindows,
-  });
-  if (r.error) die(`Could not run convex login: ${r.error.message}`);
-  if (r.status !== 0) die("convex login did not complete.");
-  return cmdAdd([name, "--force"]);
+  return loginAndStore(name, `Re-authenticating ${bold(name)} — sign into that account in the browser…`);
 }
 
 // --- link / unlink / rename / rm --------------------------------------------
@@ -183,23 +213,31 @@ export function cmdRename(args: string[]) {
   const [oldName, newName] = flags._;
   if (!oldName || !newName) die(`Usage: ${bold("cvx rename <old> <new>")}`);
   const accounts = readAccounts();
+  // New target names must be safe; overwriting an existing (legacy) name with
+  // --force is grandfathered, matching cmdAdd.
+  if (!Object.hasOwn(accounts, newName)) requireValidName(newName);
   const acc = requireAccount(accounts, oldName);
   if (oldName === newName) return console.log(dim("Same name — nothing to do."));
   if (accounts[newName] && !flags.force)
     die(`Account ${bold(newName)} already exists. Use ${bold("--force")} to overwrite.`);
 
+  let movedToken: string | undefined;
   if (acc.keychain) {
-    // secret is keyed by name in the OS keychain — move it.
+    // The secret is keyed by name in the OS keychain — re-store it under the
+    // new name in the same platform keychain it already lives in.
     const tok = tokenOf(oldName, acc);
     if (tok == null) die(`Couldn't read ${bold(oldName)}'s token from the keychain.`);
-    const rec = makeTokenRecord(detectBackend(), newName, tok);
-    deleteToken(oldName, acc);
-    accounts[newName] = { teams: acc.teams, addedAt: acc.addedAt, ...rec };
+    accounts[newName] = withTokenRecord(acc, makeTokenRecord(platformKeychain(), newName, tok));
+    movedToken = tok;
   } else {
     accounts[newName] = acc; // file/dpapi records travel with the object
+    movedToken = acc.token; // inline token if file-backed; dpapi resolves lazily below
   }
   delete accounts[oldName];
   writeAccounts(accounts);
+  // Remove the old secret only now that the vault is committed — a failed
+  // write must never leave a record pointing at an already-deleted secret.
+  if (acc.keychain) warnIfSecretLeft(oldName, deleteToken(oldName, acc));
 
   const links = readLinks();
   let moved = 0;
@@ -209,7 +247,10 @@ export function cmdRename(args: string[]) {
       moved++;
     }
   writeLinks(links);
-  if (readActive() === oldName) writeActive(newName);
+  // DPAPI records keep their secret in `enc`, so decrypt via tokenOf — but
+  // only when the renamed account is the active one (it spawns PowerShell).
+  if (readActive() === oldName)
+    writeActive(newName, movedToken ?? tokenOf(newName, accounts[newName]) ?? undefined);
 
   console.log(
     `${green("✓")} Renamed ${bold(oldName)} → ${bold(newName)}${moved ? dim(` (${moved} link(s) updated)`) : ""}`,
@@ -221,9 +262,11 @@ export function cmdRm(args: string[]) {
   if (!name) die(`Usage: ${bold("cvx rm <account>")}`);
   const accounts = readAccounts();
   const acc = requireAccount(accounts, name);
-  deleteToken(name, acc); // remove OS-keychain secret if any (no-op otherwise)
   delete accounts[name];
   writeAccounts(accounts);
+  // Remove the OS-keychain secret (if any) only after the vault commit, so a
+  // failed write can't leave a record pointing at a deleted secret.
+  warnIfSecretLeft(name, deleteToken(name, acc));
   if (readActive() === name) clearActive();
 
   const links = readLinks();
@@ -263,10 +306,16 @@ export function cmdActivate(args: string[]) {
       return;
     }
     const expensive = !!acc.keychain || !!acc.enc; // reading the token spawns a process
-    if (expensive && readActive() === link.account && currentConvexToken() != null) {
-      if (!quiet)
-        console.log(`${green("●")} ${bold(link.account)} ${teamLabel(acc)} ${dim("(already active)")}`);
-      return; // trust the marker instead of a slow secret lookup
+    if (expensive) {
+      // Trust the marker instead of a slow secret lookup — but only when its
+      // token fingerprint still matches the global config, so an external
+      // `npx convex login` can't leave the wrong account silently "active".
+      const cur = currentConvexToken();
+      if (cur != null && activeMarkerMatches(link.account, cur)) {
+        if (!quiet)
+          console.log(`${green("●")} ${bold(link.account)} ${teamLabel(acc)} ${dim("(already active)")}`);
+        return;
+      }
     }
     const token = tokenOf(link.account, acc);
     if (token == null) {
@@ -274,13 +323,13 @@ export function cmdActivate(args: string[]) {
       return;
     }
     if (currentConvexToken() === token) {
-      writeActive(link.account);
+      writeActive(link.account, token);
       if (!quiet)
         console.log(`${green("●")} ${bold(link.account)} ${teamLabel(acc)} ${dim("(already active)")}`);
       return;
     }
     setConvexToken(token);
-    writeActive(link.account);
+    writeActive(link.account, token);
     console.log(`${cyan("⇄")} convex account → ${bold(link.account)} ${teamLabel(acc)}`);
   } catch (e) {
     if (!quiet) console.error(red("cvx: ") + (e as Error).message);
@@ -300,13 +349,15 @@ export async function cmdUse(args: string[]) {
       `This directory isn't linked to an account.\n  Run ${bold("cvx link <account>")} — or ${bold("cvx use")} in an interactive terminal to pick one.`,
     );
 
-  const chosen = pickWithFzf(names) ?? (await pickNumbered(names));
-  if (!chosen) return;
+  // fzf when available, numbered fallback otherwise. An fzf cancel (Esc /
+  // Ctrl-C) cancels the command — it must not fall through to the other picker.
+  const chosen = hasCommand("fzf") ? pickWithFzf(names) : await pickNumbered(names);
+  if (!chosen) return console.log(dim("Cancelled."));
   const acc = accounts[chosen];
   const token = tokenOf(chosen, acc);
   if (token == null) die(`Couldn't read the token for ${bold(chosen)}.`);
   setConvexToken(token);
-  writeActive(chosen);
+  writeActive(chosen, token);
   console.log(`${cyan("⇄")} convex account → ${bold(chosen)} ${teamLabel(acc)}`);
 
   const here = canon(process.cwd());
@@ -320,14 +371,13 @@ export async function cmdUse(args: string[]) {
 }
 
 function pickWithFzf(names: string[]): string | null {
-  if (!hasCommand("fzf")) return null;
   const r = spawnSync("fzf", ["--height=40%", "--reverse", "--prompt", "account> "], {
     input: names.join("\n"),
     encoding: "utf8",
     stdio: ["pipe", "pipe", "inherit"],
   });
-  const out = (r.stdout || "").trim();
-  return out || null;
+  if (r.error || r.status !== 0) return null; // cancelled (or fzf failed)
+  return (r.stdout || "").trim() || null;
 }
 
 async function pickNumbered(names: string[]): Promise<string | null> {
@@ -335,10 +385,7 @@ async function pickNumbered(names: string[]): Promise<string | null> {
   names.forEach((n, i) => console.log(`  ${cyan(String(i + 1))}  ${n}`));
   const answer = await ask("> ");
   const idx = Number.parseInt(answer, 10);
-  if (!Number.isInteger(idx) || idx < 1 || idx > names.length) {
-    console.log(dim("Cancelled."));
-    return null;
-  }
+  if (!Number.isInteger(idx) || idx < 1 || idx > names.length) return null;
   return names[idx - 1];
 }
 
@@ -482,8 +529,8 @@ export function cmdRun(args: string[]) {
 
 // --- open (dashboard) -------------------------------------------------------
 
-export function cmdOpen() {
-  const dep = projectDeployment(process.cwd());
+export function cmdOpen(args: string[] = []) {
+  const dep = projectDeployment(args[0] ?? process.cwd());
   const url = dep
     ? `https://dashboard.convex.dev/d/${dep}`
     : "https://dashboard.convex.dev";
@@ -517,15 +564,18 @@ export function cmdKeychain(args: string[]) {
       );
     migrateStorage(accounts, available);
     writeConfig({ ...cfg, storage: available });
+    const n = Object.keys(accounts).length;
     console.log(
-      `${green("✓")} Moved ${Object.keys(accounts).length} account(s) into ${bold(backendLabel(available))}.`,
+      n
+        ? `${green("✓")} Moved ${n} account(s) into ${bold(backendLabel(available))}.`
+        : `${green("✓")} Token storage set to ${bold(backendLabel(available))} — new accounts will be stored there.`,
     );
     return;
   }
   if (sub === "disable") {
     migrateStorage(accounts, "file");
     writeConfig({ ...cfg, storage: "file" });
-    console.log(`${green("✓")} Moved tokens back to the encrypted file vault.`);
+    console.log(`${green("✓")} Moved tokens back to the file vault (chmod 600).`);
     return;
   }
   die(`Usage: ${bold("cvx keychain <status|enable|disable>")}`);
@@ -546,12 +596,13 @@ function migrateStorage(accounts: Accounts, target: Backend) {
   const next: Accounts = {};
   for (const name of names) {
     const rec = makeTokenRecord(target, name, tokens[name]); // may throw before we commit
-    next[name] = { teams: accounts[name].teams, addedAt: accounts[name].addedAt, ...rec };
+    next[name] = withTokenRecord(accounts[name], rec);
   }
   // 3) commit, then delete now-orphaned keychain secrets.
   writeAccounts(next);
   for (const name of names) {
-    if (accounts[name].keychain && !next[name].keychain) deleteToken(name, accounts[name]);
+    if (accounts[name].keychain && !next[name].keychain)
+      warnIfSecretLeft(name, deleteToken(name, accounts[name]));
   }
 }
 
@@ -581,17 +632,28 @@ export async function cmdDoctor(args: string[] = []) {
   );
 
   let accounts: Accounts = {};
-  let vaultOk = true;
+  let nLink = 0;
+  let vaultOk = true; // accounts.json parses
+  let linksOk = true; // links.json parses (report separately — accounts may be fine)
   try {
     accounts = readAccounts();
   } catch {
     vaultOk = false;
     healthy = false;
   }
-  const nLink = vaultOk ? Object.keys(readLinks()).length : 0;
+  try {
+    nLink = Object.keys(readLinks()).length;
+  } catch {
+    linksOk = false;
+    healthy = false;
+  }
   const nAcc = Object.keys(accounts).length;
   console.log(
-    `  ${mark(vaultOk)} vault             ${vaultOk ? dim(`${nAcc} account(s), ${nLink} link(s)  ·  ~/.convex-switch`) : red("corrupted — see ~/.convex-switch")}`,
+    `  ${mark(vaultOk && linksOk)} vault             ${
+      vaultOk && linksOk
+        ? dim(`${nAcc} account(s), ${nLink} link(s)  ·  ~/.convex-switch`)
+        : red(`${vaultOk ? "links.json" : "accounts.json"} corrupted — see ~/.convex-switch`)
+    }`,
   );
 
   const backend = storageBackend();
@@ -600,14 +662,14 @@ export async function cmdDoctor(args: string[] = []) {
   const active = vaultOk ? activeAccountName(accounts) : null;
   console.log(`  ${warn(!!active)} active account    ${active ? dim(active) : dim("none active")}`);
 
-  const rcs = [".zshrc", ".bashrc", ".config/fish/config.fish"].map((f) => join(HOME, f));
-  const hooked = rcs.some((rc) => existsSync(rc) && readFileSync(rc, "utf8").includes("convex-switch"));
+  const rcs = Object.values(RC_FILES).map((f) => join(HOME, f));
+  const hooked = rcs.some((rc) => existsSync(rc) && readFileSync(rc, "utf8").includes(HOOK_MARKER));
   console.log(
     `  ${warn(hooked)} shell hook        ${hooked ? dim("installed") : yellow("not installed — run `cvx hook --install`")}`,
   );
 
   // Token health — pings Convex for each account (skip with --no-tokens).
-  if (vaultOk && nAcc && flags.tokens !== false && flags["no-tokens"] !== true) {
+  if (vaultOk && nAcc && !flags["no-tokens"]) {
     console.log(bold("\nToken health:"));
     for (const [name, acc] of Object.entries(accounts)) {
       const t = tokenOf(name, acc);
@@ -643,8 +705,10 @@ export async function cmdDoctor(args: string[] = []) {
 export function cmdCompletions(args: string[]) {
   const shell = parseFlags(args)._[0] || detectShell();
   const script = completionFor(shell);
-  if (!script)
+  if (!script) {
+    if (shell === "nu") die("Nushell completions aren't available yet (the cd-hook works: `cvx hook --shell nu`).");
     die(`Usage: ${bold("cvx completions <zsh|bash|fish|powershell>")}`);
+  }
   process.stdout.write(script);
 }
 
@@ -663,15 +727,9 @@ export function cmdHook(args: string[]) {
   }
   if (shell === "powershell") return installPwsh(snippet);
 
-  const rcPath: Record<string, string> = {
-    zsh: ".zshrc",
-    bash: ".bashrc",
-    fish: ".config/fish/config.fish",
-    nu: ".config/nushell/config.nu",
-  };
-  const rc = join(HOME, rcPath[shell]);
+  const rc = join(HOME, RC_FILES[shell]);
   const body = existsSync(rc) ? readFileSync(rc, "utf8") : "";
-  if (body.includes("convex-switch")) {
+  if (body.includes(HOOK_MARKER)) {
     console.log(yellow(`Hook already present in ${shortPath(rc)} — nothing to do.`));
     return;
   }
@@ -695,7 +753,7 @@ function installPwsh(snippet: string) {
     return;
   }
   const body = existsSync(profile) ? readFileSync(profile, "utf8") : "";
-  if (body.includes("convex-switch")) {
+  if (body.includes(HOOK_MARKER)) {
     console.log(yellow(`Hook already present in ${profile} — nothing to do.`));
     return;
   }

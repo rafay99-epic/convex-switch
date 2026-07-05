@@ -4,8 +4,6 @@
  * `cvx accounts --names` (which prints one bare name per line).
  */
 
-export type CompletionShell = "zsh" | "bash" | "fish" | "powershell";
-
 // Subcommands that take an account name as their first argument.
 const ACCOUNT_CMDS = "link rm rename run refresh";
 const SUBCOMMANDS =
