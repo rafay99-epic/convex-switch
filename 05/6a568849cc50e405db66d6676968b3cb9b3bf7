@@ -1,0 +1,19 @@
+bunfig.toml
+  s_d679e3b5467c5a::t_abde86c94a6731 5-7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "056a568849cc50e405db66d6676968b3cb9b3bf7",
+  "prompts": {},
+  "sessions": {
+    "s_d679e3b5467c5a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e026300c-e577-40d9-8080-e0f2676d989b",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
