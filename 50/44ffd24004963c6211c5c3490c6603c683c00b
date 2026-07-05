@@ -1,0 +1,33 @@
+package.json
+  s_d679e3b5467c5a::t_3ac9b339d0b730 9-12
+.github/workflows/test.yml
+  s_d679e3b5467c5a::t_26ec0d54189209 1-18
+tests/cli.test.ts
+  s_d679e3b5467c5a::t_2e052cb09d0ae0 1-33,36-314
+  s_d679e3b5467c5a::t_0a69d5da00d9ac 34-35
+CLAUDE.md
+  s_d679e3b5467c5a::t_423d05d98c7c4e 1-74
+tests/args.test.ts
+  s_d679e3b5467c5a::t_ae213f5a65badc 1-47
+README.md
+  s_d679e3b5467c5a::t_e7606ed6560c30 215-227
+tests/store.test.ts
+  s_d679e3b5467c5a::t_416e047919b945 1-92,94-98
+  s_d679e3b5467c5a::t_112fae7da263dd 93
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5044ffd24004963c6211c5c3490c6603c683c00b",
+  "prompts": {},
+  "sessions": {
+    "s_d679e3b5467c5a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e026300c-e577-40d9-8080-e0f2676d989b",
+        "model": "claude-fable-5"
+      },
+      "human_author": null
+    }
+  }
+}
