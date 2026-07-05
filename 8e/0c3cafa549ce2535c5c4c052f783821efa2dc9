@@ -1,0 +1,47 @@
+man/cvx.1
+  s_d679e3b5467c5a::t_c86a3ed91ad5c1 99,112-119
+  s_d679e3b5467c5a::t_dc7c21c62af67e 120
+README.md
+  s_d679e3b5467c5a::t_843cbd4f4190d4 163-164,173
+tests/system.test.ts
+  s_d679e3b5467c5a::t_4ca060505d21b5 1-27,33-62
+  s_d679e3b5467c5a::t_f451da6fb19b1e 28-32
+bin/cvx.ts
+  s_d679e3b5467c5a::t_84e08c8387fb6e 36,91-93
+src/migrate.ts
+  s_d679e3b5467c5a::t_84e08c8387fb6e 45-47
+tests/cli.test.ts
+  s_d679e3b5467c5a::t_75a6986fc347a9 197-212
+  s_d679e3b5467c5a::t_e17f1365d195bd 459-522
+src/commands.ts
+  s_d679e3b5467c5a::t_843cbd4f4190d4 14,961-962
+  s_d679e3b5467c5a::t_2573edd2fff259 45-47,326-328,332-340,357,620-634,637-642,868,1033
+  s_d679e3b5467c5a::t_3363e1d7da6356 9,203,678-680
+  s_d679e3b5467c5a::t_84e08c8387fb6e 66,913-960,963-987
+  s_d679e3b5467c5a::t_dbb3d83bddbf87 988
+src/completions.ts
+  s_d679e3b5467c5a::t_843cbd4f4190d4 10
+src/system.ts
+  s_d679e3b5467c5a::t_5d13daaabf5dd5 26-98
+src/store.ts
+  s_d679e3b5467c5a::t_72c2f9e2e7d4e5 139-253
+  s_d679e3b5467c5a::t_106292378202b4 13,16-17
+src/ui.ts
+  s_d679e3b5467c5a::t_843cbd4f4190d4 215-216,219
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "8e0c3cafa549ce2535c5c4c052f783821efa2dc9",
+  "prompts": {},
+  "sessions": {
+    "s_d679e3b5467c5a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e026300c-e577-40d9-8080-e0f2676d989b",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
