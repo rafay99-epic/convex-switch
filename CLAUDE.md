@@ -52,6 +52,13 @@ authored by the repo owner, full stop.
 - Tests live in `tests/` and run with `bun test`. E2E tests spawn
   `bun bin/cvx.ts …` with a fresh `mkdtemp` `CVX_HOME` per suite and assert on
   exit codes and output. `NO_COLOR=1` keeps output assertable.
+- **Unit-test files must use `process.env.CVX_HOME` (set by `tests/preload.ts`
+  via bunfig.toml before any file loads) — never mint their own mkdtemp.**
+  Test files load in no guaranteed order and share one module cache; a private
+  mkdtemp can diverge from where src/paths.ts actually bound, and an import
+  without CVX_HOME set would bind the REAL home directory.
+- `CVX_PASSPHRASE` makes `cvx vault …` and `cvx export`/`import`
+  non-interactive — tests use it so nothing ever prompts.
 - The interactive migration prompt needs a real PTY, which `bun test` doesn't
   provide — that one flow is covered by the manual recipe in
   `scripts/sandbox.sh` (make the vault legacy, run any interactive command).
@@ -60,8 +67,9 @@ authored by the repo owner, full stop.
 
 ## Architecture notes worth knowing
 
-- `src/store.ts` is the ONLY place `HOME` is resolved (that's what makes
-  `CVX_HOME` a complete sandbox). Keep it that way.
+- `src/paths.ts` is the ONLY place `HOME` is resolved (that's what makes
+  `CVX_HOME` a complete sandbox). Keep it that way. vault.ts must not import
+  store.ts (store imports it) — that's why paths live in their own module.
 - Vault files are written atomically (temp + rename) and chmod 600; the vault
   dir is 700. `readVaultJSON` treats a corrupt file as fatal on purpose —
   never "fix" it to silently reset, that loses accounts.
@@ -70,5 +78,8 @@ authored by the repo owner, full stop.
   the fingerprint matches the current global token.
 - `cvx activate` runs on every `cd` via shell hooks — treat it as a hot path
   (no network, no extra process spawns, must never throw).
-- The file vault stores tokens in PLAINTEXT (mode 600). Never describe it as
-  encrypted; the OS keychain is the opt-in encrypted option.
+- The default file vault stores tokens in PLAINTEXT (mode 600). Never describe
+  it as encrypted; the opt-in encrypted options are the OS keychain
+  (`cvx keychain enable`) and the passphrase vault (`cvx vault encrypt`, see
+  src/vault.ts — ssh-agent-style session key cached under the OS temp dir,
+  keyed by vault path so sandboxes never share a session with the real vault).

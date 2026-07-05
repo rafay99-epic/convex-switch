@@ -40,8 +40,10 @@ import {
   clearActive,
   activeAccountName,
   projectDeployment,
+  projectEnv,
 } from "./store";
-import { bold, dim, green, yellow, red, cyan, die, teamLabel } from "./ui";
+import { vaultInitialized, vaultLocked, initVault, destroyVaultMeta, unlock, lock } from "./vault";
+import { bold, dim, green, yellow, red, cyan, die, teamLabel, askHidden } from "./ui";
 import { parseFlags } from "./args";
 
 // --- small helpers ----------------------------------------------------------
@@ -61,6 +63,31 @@ function requireValidName(name: string) {
       `Invalid account name ${bold(name)}.\n` +
         `  Use letters, digits, dots, dashes or underscores, starting with a letter or digit.`,
     );
+}
+
+/** "today" / "3d ago" from an ISO timestamp, or null when unknown. */
+function ago(iso?: string): string | null {
+  if (!iso) return null;
+  const days = Math.floor((Date.now() - Date.parse(iso)) / 86400000);
+  if (!Number.isFinite(days) || days < 0) return null;
+  return days === 0 ? "today" : `${days}d ago`;
+}
+
+/**
+ * Wrong-account guard: the Convex CLI writes a `# team: …` note on the
+ * CONVEX_DEPLOYMENT line of .env.local. If that team isn't one the account
+ * belongs to, this project would deploy to a DIFFERENT account than the one
+ * being activated — say so loudly, even in quiet (hook) mode.
+ */
+function warnTeamMismatch(dir: string, name: string, acc: Account) {
+  if (!acc.teams.length) return; // unverified account — nothing to compare
+  const team = projectEnv(dir).team;
+  if (!team || acc.teams.some((t) => t.slug === team)) return;
+  console.log(
+    `${yellow("▲")} team mismatch: this project's deployment belongs to ${bold(team)}, ` +
+      `but ${bold(name)} only has ${acc.teams.map((t) => t.slug).join(", ")}.\n` +
+      dim("  Linked to the wrong account? Fix with: cvx link <account>"),
+  );
 }
 
 /** Warn (don't fail) when an account's OS-keychain secret couldn't be removed. */
@@ -132,7 +159,8 @@ export async function cmdAdd(args: string[]) {
   } catch (e) {
     die(`Couldn't store the token: ${(e as Error).message}`);
   }
-  accounts[name] = { ...rec, teams, addedAt: new Date().toISOString() };
+  const now = new Date().toISOString();
+  accounts[name] = { ...rec, teams, addedAt: accounts[name]?.addedAt ?? now, verifiedAt: now };
   writeAccounts(accounts);
   if (token === currentConvexToken()) writeActive(name, token);
 
@@ -167,9 +195,22 @@ export function cmdLogin(args: string[]) {
 }
 
 /** Re-authenticate an existing account (sign in again, refresh its token). */
-export function cmdRefresh(args: string[]) {
-  const name = parseFlags(args)._[0];
-  if (!name) die(`Usage: ${bold("cvx refresh <account>")}`);
+export async function cmdRefresh(args: string[]) {
+  const flags = parseFlags(args);
+  if (flags.all) {
+    const names = Object.keys(readAccounts());
+    if (!names.length) die("No accounts yet. Run `cvx login <name>` first.");
+    if (!hasCommand("npx")) die(`${bold("npx")} (Node.js) not found — needed to re-authenticate.`);
+    console.log(bold(`Re-authenticating ${names.length} account(s)`) + dim(" — one browser sign-in each."));
+    for (const [i, name] of names.entries()) {
+      console.log(`\n${cyan(`[${i + 1}/${names.length}]`)} ${bold(name)}`);
+      await loginAndStore(name, `Sign into ${bold(name)} in the browser…`);
+    }
+    console.log(`\n${green("✓")} All accounts refreshed.`);
+    return;
+  }
+  const name = flags._[0];
+  if (!name) die(`Usage: ${bold("cvx refresh <account>")}   (or: cvx refresh --all)`);
   const accounts = readAccounts();
   if (!accounts[name])
     die(`Unknown account ${bold(name)}. Use ${bold(`cvx login ${name}`)} to add it.`);
@@ -305,6 +346,7 @@ export function cmdActivate(args: string[]) {
       if (!quiet) console.log(yellow(`Linked to unknown account "${link.account}".`));
       return;
     }
+    warnTeamMismatch(flags._[0] ?? process.cwd(), link.account, acc);
     const expensive = !!acc.keychain || !!acc.enc; // reading the token spawns a process
     if (expensive) {
       // Trust the marker instead of a slow secret lookup — but only when its
@@ -319,6 +361,14 @@ export function cmdActivate(args: string[]) {
     }
     const token = tokenOf(link.account, acc);
     if (token == null) {
+      // A locked vault must be visible even from the quiet cd-hook, or the
+      // account silently never switches.
+      if (acc.pw && vaultLocked()) {
+        console.log(
+          `${yellow("⚿")} vault locked — run ${bold("cvx vault unlock")} to switch to ${bold(link.account)}`,
+        );
+        return;
+      }
       if (!quiet) console.error(red("cvx: ") + `couldn't read the token for ${link.account}`);
       return;
     }
@@ -336,12 +386,31 @@ export function cmdActivate(args: string[]) {
   }
 }
 
-/** use — like activate, but if the dir isn't linked, pick an account interactively. */
+/** Activate an account globally by name (no link involved). */
+function activateByName(name: string, acc: Account) {
+  const token = tokenOf(name, acc);
+  if (token == null) {
+    if (acc.pw && vaultLocked()) die(`Vault locked — run ${bold("cvx vault unlock")} first.`);
+    die(`Couldn't read the token for ${bold(name)}.`);
+  }
+  setConvexToken(token);
+  writeActive(name, token);
+  console.log(`${cyan("⇄")} convex account → ${bold(name)} ${teamLabel(acc)}`);
+}
+
+/**
+ * use — `cvx use <account>` activates that account by name from anywhere.
+ * With a path (or nothing): activate the dir's linked account, else pick
+ * interactively. A name wins over a same-named directory; use ./dir to force
+ * the path meaning.
+ */
 export async function cmdUse(args: string[]) {
   const flags = parseFlags(args);
-  if (resolveLink(flags._[0] ?? process.cwd())) return cmdActivate(args);
-
+  const arg = flags._[0];
   const accounts = readAccounts();
+  if (arg && Object.hasOwn(accounts, arg)) return activateByName(arg, accounts[arg]);
+  if (resolveLink(arg ?? process.cwd())) return cmdActivate(args);
+
   const names = Object.keys(accounts);
   if (!names.length) die("No accounts yet. Run `cvx login <name>` first.");
   if (!process.stdin.isTTY)
@@ -353,12 +422,7 @@ export async function cmdUse(args: string[]) {
   // Ctrl-C) cancels the command — it must not fall through to the other picker.
   const chosen = hasCommand("fzf") ? pickWithFzf(names) : await pickNumbered(names);
   if (!chosen) return console.log(dim("Cancelled."));
-  const acc = accounts[chosen];
-  const token = tokenOf(chosen, acc);
-  if (token == null) die(`Couldn't read the token for ${bold(chosen)}.`);
-  setConvexToken(token);
-  writeActive(chosen, token);
-  console.log(`${cyan("⇄")} convex account → ${bold(chosen)} ${teamLabel(acc)}`);
+  activateByName(chosen, accounts[chosen]);
 
   const here = canon(process.cwd());
   const yn = await ask(dim(`Link ${shortPath(here)} to ${chosen}? [y/N] `));
@@ -430,6 +494,8 @@ export function cmdStatus(args: string[] = []) {
       }`,
     );
   else console.log(dim("  not linked"));
+  if (link && accounts[link.account])
+    warnTeamMismatch(process.cwd(), link.account, accounts[link.account]);
 }
 
 export function cmdAccounts(args: string[] = []) {
@@ -447,8 +513,11 @@ export function cmdAccounts(args: string[] = []) {
   console.log(bold("Accounts:"));
   for (const [name, acc] of Object.entries(accounts)) {
     const dot = name === active ? green("●") : dim("○");
-    const store = acc.keychain ? dim("· keychain") : acc.enc ? dim("· encrypted") : "";
-    console.log(`  ${dot} ${bold(name.padEnd(14))} ${teamLabel(acc)} ${store}`);
+    const store = acc.keychain ? dim("· keychain") : acc.enc || acc.pw ? dim("· encrypted") : "";
+    const age = ago(acc.verifiedAt);
+    console.log(
+      `  ${dot} ${bold(name.padEnd(14))} ${teamLabel(acc)} ${store}${age ? dim(` · verified ${age}`) : ""}`,
+    );
   }
 }
 
@@ -564,6 +633,7 @@ export function cmdKeychain(args: string[]) {
       );
     migrateStorage(accounts, available);
     writeConfig({ ...cfg, storage: available });
+    if (cfg.storage === "passphrase") destroyVaultMeta(); // tokens left the encrypted vault
     const n = Object.keys(accounts).length;
     console.log(
       n
@@ -575,6 +645,7 @@ export function cmdKeychain(args: string[]) {
   if (sub === "disable") {
     migrateStorage(accounts, "file");
     writeConfig({ ...cfg, storage: "file" });
+    if (cfg.storage === "passphrase") destroyVaultMeta(); // tokens left the encrypted vault
     console.log(`${green("✓")} Moved tokens back to the file vault (chmod 600).`);
     return;
   }
@@ -604,6 +675,82 @@ function migrateStorage(accounts: Accounts, target: Backend) {
     if (accounts[name].keychain && !next[name].keychain)
       warnIfSecretLeft(name, deleteToken(name, accounts[name]));
   }
+}
+
+// --- vault (passphrase-encrypted tokens) -------------------------------------
+
+async function newPassphrase(): Promise<string> {
+  const env = process.env.CVX_PASSPHRASE;
+  if (env !== undefined) {
+    if (env.length < 8) die("CVX_PASSPHRASE must be at least 8 characters.");
+    return env;
+  }
+  const a = await askHidden("New passphrase (min 8 chars): ");
+  if (a.length < 8) die("Passphrase must be at least 8 characters — nothing changed.");
+  const b = await askHidden("Repeat passphrase: ");
+  if (a !== b) die("Passphrases didn't match — nothing changed.");
+  return a;
+}
+
+export async function cmdVault(args: string[]) {
+  const sub = parseFlags(args)._[0] || "status";
+  const cfg = readConfig();
+
+  if (sub === "status") {
+    const backend = storageBackend();
+    console.log(bold("Vault encryption") + "\n");
+    if (backend === "passphrase") {
+      console.log(`  ${green("●")} passphrase-encrypted ${vaultLocked() ? yellow("(locked)") : dim("(unlocked)")}`);
+      console.log(dim(`  cvx vault ${vaultLocked() ? "unlock" : "lock"} · cvx vault decrypt to turn off`));
+    } else {
+      console.log(`  ${dim("○")} not encrypted ${dim(`(tokens in ${backendLabel(backend)})`)}`);
+      console.log(dim("  Run `cvx vault encrypt` to protect tokens with a passphrase."));
+    }
+    return;
+  }
+
+  if (sub === "encrypt") {
+    if (storageBackend() === "passphrase")
+      return console.log(yellow("Vault is already passphrase-encrypted."));
+    const accounts = readAccounts();
+    // Pre-flight: every token must be readable BEFORE any vault state exists,
+    // so a failure changes nothing.
+    for (const [n, acc] of Object.entries(accounts))
+      if (tokenOf(n, acc) == null)
+        die(`Couldn't read the token for ${bold(n)} — aborting, nothing changed.`);
+    initVault(await newPassphrase());
+    migrateStorage(accounts, "passphrase");
+    writeConfig({ ...cfg, storage: "passphrase" });
+    console.log(`${green("✓")} Tokens encrypted with your passphrase ${dim("(unlocked for this session)")}.`);
+    console.log(dim("  `cvx vault lock` locks it; a reboot locks it too."));
+    return;
+  }
+
+  if (sub === "decrypt") {
+    if (storageBackend() !== "passphrase") die("Vault isn't passphrase-encrypted.");
+    if (vaultLocked()) die(`Vault is locked — run ${bold("cvx vault unlock")} first.`);
+    migrateStorage(readAccounts(), "file");
+    writeConfig({ ...cfg, storage: "file" });
+    destroyVaultMeta();
+    console.log(`${green("✓")} Tokens moved back to the plain file vault (chmod 600).`);
+    return;
+  }
+
+  if (sub === "unlock") {
+    if (!vaultInitialized()) die("Vault isn't passphrase-encrypted. Set it up with `cvx vault encrypt`.");
+    const pass = process.env.CVX_PASSPHRASE ?? (await askHidden("Passphrase: "));
+    if (!unlock(pass)) die("Wrong passphrase.");
+    console.log(`${green("✓")} Vault unlocked for this session.`);
+    return;
+  }
+
+  if (sub === "lock") {
+    lock();
+    console.log(`${green("✓")} Vault locked. Unlock with ${bold("cvx vault unlock")}.`);
+    return;
+  }
+
+  die(`Usage: ${bold("cvx vault <status|encrypt|decrypt|unlock|lock>")}`);
 }
 
 // --- version / doctor -------------------------------------------------------
@@ -657,7 +804,9 @@ export async function cmdDoctor(args: string[] = []) {
   );
 
   const backend = storageBackend();
-  console.log(`  ${green("✓")} token storage     ${dim(backendLabel(backend))}`);
+  const lockNote =
+    backend === "passphrase" ? (vaultLocked() ? yellow(" · locked — run `cvx vault unlock`") : dim(" · unlocked")) : "";
+  console.log(`  ${green("✓")} token storage     ${dim(backendLabel(backend))}${lockNote}`);
 
   const active = vaultOk ? activeAccountName(accounts) : null;
   console.log(`  ${warn(!!active)} active account    ${active ? dim(active) : dim("none active")}`);
@@ -671,6 +820,7 @@ export async function cmdDoctor(args: string[] = []) {
   // Token health — pings Convex for each account (skip with --no-tokens).
   if (vaultOk && nAcc && !flags["no-tokens"]) {
     console.log(bold("\nToken health:"));
+    let verifiedAny = false;
     for (const [name, acc] of Object.entries(accounts)) {
       const t = tokenOf(name, acc);
       if (t == null) {
@@ -680,7 +830,12 @@ export async function cmdDoctor(args: string[] = []) {
       }
       try {
         await verifyToken(t);
-        console.log(`  ${green("✓")} ${bold(name.padEnd(14))} ${dim("valid")}`);
+        const age = ago(acc.verifiedAt);
+        console.log(
+          `  ${green("✓")} ${bold(name.padEnd(14))} ${dim("valid")}${age ? dim(` · last verified ${age}`) : ""}`,
+        );
+        acc.verifiedAt = new Date().toISOString();
+        verifiedAny = true;
       } catch (e) {
         const msg = String((e as Error).message);
         const offline = /reach Convex|timed out/.test(msg);
@@ -693,6 +848,7 @@ export async function cmdDoctor(args: string[] = []) {
         }
       }
     }
+    if (verifiedAny) writeAccounts(accounts); // persist fresh verifiedAt stamps
   }
 
   console.log();

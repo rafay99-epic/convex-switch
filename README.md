@@ -117,6 +117,14 @@ cd ~/Code/project-b && cvx link work
 cd ~/Code/project-c && cvx link personal   # one account → many projects
 ```
 
+## Safety net: the wrong-account guard
+
+The Convex CLI stamps a `# team: …` note on the `CONVEX_DEPLOYMENT` line of
+`.env.local`. On every activation (including the automatic cd-hook), cvx
+cross-checks that team against the linked account's teams and warns loudly on
+a mismatch — catching "about to deploy with the wrong account" *before* it
+happens. `cvx status` shows the same warning.
+
 ## Daily use
 
 ```bash
@@ -134,21 +142,24 @@ bun run dev             # runs as work — both live simultaneously
 | --- | --- |
 | `cvx add [name]` | Store the current `~/.convex` login as an account |
 | `cvx login <name>` | `npx convex login`, then store it as `<name>` |
-| `cvx refresh <account>` | Re-authenticate an account (refresh its token) |
+| `cvx refresh <account>` / `--all` | Re-authenticate one account — or every account in one sitting |
 | `cvx link <account> [path]` | Link a project dir (default cwd) to an account |
 | `cvx unlink [path]` | Remove a link |
 | `cvx rename <old> <new>` | Rename an account, keeping its links |
 | `cvx rm <account>` | Forget an account and its links |
-| `cvx use` | Activate this dir's account — or pick one interactively if unlinked |
+| `cvx use [account]` | Activate by name from anywhere — or this dir's account / an interactive pick |
 | `cvx run <account> -- <cmd>` | Run one command as `<account>` without changing the global login |
 | `cvx open` | Open the Convex dashboard for this project's deployment |
 | `cvx activate [-q]` | Activate this dir's account (the hook calls this) |
 | `cvx status [--json]` | Show the active account and this dir's link |
-| `cvx accounts` | List stored accounts |
+| `cvx accounts` | List stored accounts (with when each token was last verified) |
 | `cvx ls` | List linked projects |
 | `cvx which [path]` | Print the account name for a dir (scripting) |
 | `cvx prompt` | Print the active account name (for a shell prompt segment) |
 | `cvx keychain <status\|enable\|disable>` | Store tokens in the OS keychain instead of a file |
+| `cvx vault <status\|encrypt\|decrypt\|unlock\|lock>` | Passphrase-encrypt stored tokens (unlock once per session) |
+| `cvx export [file]` / `cvx import <file>` | Encrypted vault backup / restore — new-machine setup in one command |
+| `cvx upgrade` | Check for a newer release and print the exact upgrade command |
 | `cvx doctor` | Check setup + per-account token health |
 | `cvx completions <shell>` | Print a completion script (zsh/bash/fish/powershell) |
 | `cvx hook [--install] [--shell …]` | Install the cd-hook (zsh/bash/fish/nu/powershell) |
@@ -199,11 +210,17 @@ a single binary, so the split costs nothing at build time.
 
 ```
 bin/cvx.ts        entry point + command dispatch
-src/store.ts      data layer: vault I/O, the config swap, token verify, paths
+src/paths.ts      the ONE place HOME is resolved (CVX_HOME sandbox support)
+src/store.ts      data layer: vault I/O, the config swap, token verify
 src/ui.ts         the logo banner, first-run welcome, help
 src/colors.ts     the palette (edit here to re-theme)
 src/commands.ts   one function per subcommand
 src/hooks.ts      zsh / bash / PowerShell shell-hook snippets
+src/keychain.ts   OS keychain / DPAPI token backends
+src/crypto.ts     scrypt + AES-256-GCM (vault encryption, export files)
+src/vault.ts      passphrase-encrypted vault + session unlock
+src/transfer.ts   cvx export / import (encrypted backups)
+src/upgrade.ts    cvx upgrade (release check)
 src/system.ts     external-tool checks (node/npx)
 src/args.ts       flag parsing
 man/cvx.1         man page (installed by Homebrew/npm → `man cvx`)

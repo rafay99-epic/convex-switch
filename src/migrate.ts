@@ -93,8 +93,8 @@ export async function maybeMigrate() {
 function runMigration(accounts: Accounts, cfg: Config) {
   const next: Accounts = {};
   for (const [n, acc] of Object.entries(accounts)) {
-    if (acc.keychain || acc.enc) {
-      next[n] = acc;
+    if (acc.keychain || acc.enc || acc.pw) {
+      next[n] = acc; // already in a current, secured shape — leave untouched
       continue;
     }
     // Read the legacy inline token; abort cleanly before touching anything if
