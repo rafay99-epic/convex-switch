@@ -212,6 +212,26 @@ man/cvx.1         man page (installed by Homebrew/npm → `man cvx`)
 First run of a bare `cvx` shows a welcome screen; `cvx welcome` shows it again,
 and `man cvx` opens the manual.
 
+## Testing safely (sandbox)
+
+Never test a build against your real vault. Everything cvx touches — the vault,
+the global `~/.convex/config.json` it swaps, the rc files `hook --install`
+edits — resolves from one base directory, and setting `CVX_HOME` relocates all
+of it:
+
+```sh
+scripts/sandbox.sh                # build + drop into a shell with an EMPTY sandbox vault
+scripts/sandbox.sh --copy-vault   # same, but seeded with a COPY of your real vault
+```
+
+Inside that shell `cvx` is the fresh build and every command — `link`,
+`activate`, `rm`, even the migration prompt and `hook --install` — reads and
+writes only the sandbox. `exit` to leave; your real setup is never touched.
+Works without the script too: `CVX_HOME=/tmp/try cvx status`.
+
+One exception can't be sandboxed: the OS keychain is per-user, so skip
+`cvx keychain enable` in a sandbox (the default file backend is used anyway).
+
 ## Releasing
 
 Pushing to `main` (touching `bin/**` or `package.json`) triggers

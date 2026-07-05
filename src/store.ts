@@ -30,7 +30,15 @@ export const VERSION = "0.0.0-dev";
 
 // --- Paths & constants ------------------------------------------------------
 
-export const HOME = homedir();
+/**
+ * Everything cvx touches lives under this base dir: the vault, the global
+ * Convex config it swaps, and the rc files `hook --install` edits. Setting
+ * CVX_HOME relocates ALL of it — a fully isolated sandbox for testing a new
+ * build without risking the real vault (`CVX_HOME=/tmp/cvx-sandbox cvx …`).
+ * NOTE: the OS keychain is per-user, not per-HOME — stick to the default
+ * file backend in a sandbox (don't run `cvx keychain enable` there).
+ */
+export const HOME = process.env.CVX_HOME || homedir();
 export const VAULT = join(HOME, ".convex-switch");
 const ACCOUNTS_FILE = join(VAULT, "accounts.json");
 const LINKS_FILE = join(VAULT, "links.json");
