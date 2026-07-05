@@ -1,0 +1,23 @@
+scripts/sandbox.sh
+  s_d679e3b5467c5a::t_ff33c29e72ccce 1-41
+src/store.ts
+  s_d679e3b5467c5a::t_adc40eb2396f14 33-41
+README.md
+  s_d679e3b5467c5a::t_ba4eede93bc252 215-234
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "102661aef14a9a90ef8fc34774f39b96a7f123cc",
+  "prompts": {},
+  "sessions": {
+    "s_d679e3b5467c5a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e026300c-e577-40d9-8080-e0f2676d989b",
+        "model": "claude-fable-5"
+      },
+      "human_author": null
+    }
+  }
+}
