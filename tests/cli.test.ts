@@ -194,6 +194,22 @@ describe("run", () => {
     expect(cvx(["run", "work"]).code).toBe(1);
     expect(cvx(["run", "ghost", "--", "echo", "hi"]).err).toContain("Unknown account");
   });
+  test("arguments with spaces and quotes survive on every OS", () => {
+    // The exact case the CI matrix caught: shell:true used to let cmd.exe
+    // re-split spaced args on Windows. runInherit must deliver them verbatim.
+    const r = cvx(["run", "work", "--", process.execPath, "-e", "console.log('a b  c')"]);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("a b  c");
+    const q = cvx(["run", "work", "--", process.execPath, "-e", 'console.log("percent 100% & pipe |")']);
+    expect(q.code).toBe(0);
+    expect(q.out).toContain("percent 100% & pipe |");
+  });
+  test("resolves .cmd shims (npx) through the safe path", () => {
+    // npx is npx.cmd on Windows — exercises runInherit's cmd.exe branch there.
+    const r = cvx(["run", "work", "--", "npx", "--version"]);
+    expect(r.code).toBe(0);
+    expect(r.out.trim()).toMatch(/^\d+\./);
+  });
 });
 
 describe("rename / rm", () => {
@@ -440,6 +456,70 @@ describe("refresh --all / help", () => {
 // Windows opens URLs via `cmd /c start`, not an `open`/`xdg-open` binary on
 // PATH — stubbing cmd.exe itself isn't safe (it's used for far more than
 // launching a browser), so this whole flow is untestable headlessly there.
+describe("undo", () => {
+  test("rm (piped: no confirmation) then undo --yes restores the account and links", () => {
+    seedAccounts();
+    cvx(["link", "work", PROJ]);
+    expect(cvx(["rm", "work"]).code).toBe(0); // piped stdin → no prompt, removes
+    expect(JSON.parse(readFileSync(ACCOUNTS, "utf8")).work).toBeUndefined();
+    const r = cvx(["undo", "--yes"]);
+    expect(r.code).toBe(0);
+    expect(JSON.parse(readFileSync(ACCOUNTS, "utf8")).work.token).toBe("tok-work-AAA");
+    expect(cvx(["which", PROJ]).out.trim()).toBe("work");
+  });
+  test("undo of an undo reverses the restore", () => {
+    cvx(["rm", "work"]);
+    cvx(["undo", "--yes"]); // work back
+    cvx(["undo", "--yes"]); // reverse the restore → work gone again
+    expect(JSON.parse(readFileSync(ACCOUNTS, "utf8")).work).toBeUndefined();
+    cvx(["undo", "--yes"]); // and back once more
+    expect(JSON.parse(readFileSync(ACCOUNTS, "utf8")).work).toBeDefined();
+  });
+  test("--list shows labeled history; piped undo without --yes refuses", () => {
+    const l = cvx(["undo", "--list"]);
+    expect(l.code).toBe(0);
+    expect(l.out).toContain("before");
+    const r = cvx(["undo"]);
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("--yes");
+  });
+  test("history is capped at 5 snapshots", () => {
+    seedAccounts();
+    for (let i = 0; i < 8; i++) cvx(["link", "work", PROJ]); // 8 mutating commands
+    const { readdirSync } = require("node:fs");
+    const n = readdirSync(join(HOME, ".convex-switch", "backups")).filter((f: string) =>
+      f.endsWith(".json"),
+    ).length;
+    expect(n).toBeLessThanOrEqual(5);
+  });
+  test("vault encrypt purges the undo history (it held plaintext tokens)", () => {
+    seedAccounts();
+    cvx(["link", "work", PROJ]); // ensure at least one snapshot exists
+    expect(cvx(["undo", "--list"]).out).toContain("before");
+    expect(cvx(["vault", "encrypt"], { env: { CVX_PASSPHRASE: "purge-check-pass" } }).code).toBe(0);
+    expect(cvx(["undo", "--list"]).out).toContain("No undo history");
+    cvx(["vault", "decrypt"], { env: { CVX_PASSPHRASE: "purge-check-pass" } });
+  });
+});
+
+describe("prompt variants", () => {
+  test("--starship prints a paste-ready config block", () => {
+    const r = cvx(["prompt", "--starship"]);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("[custom.cvx]");
+    expect(r.out).toContain('command = "cvx prompt"');
+  });
+  test("--color emits raw ANSI even when piped (explicit opt-in exception)", () => {
+    seedAccounts();
+    cvx(["use", "work"]);
+    const r = cvx(["prompt", "--color"]);
+    expect(r.out).toContain("\x1b[1;38;5;");
+    expect(r.out).toContain("work");
+    // bare prompt stays undecorated
+    expect(cvx(["prompt"]).out).toBe("work");
+  });
+});
+
 describe.skipIf(WIN)("open (stubbed opener — never launches a browser)", () => {
   const env = { PATH: `${STUB_BIN}${delimiter}/usr/bin${delimiter}/bin` };
   test("prints the deployment URL when the opener fails", () => {

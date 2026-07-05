@@ -6,11 +6,12 @@ import { spawnSync } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 
 import { type Shell, hookFor, detectShell, SHELLS, HOOK_MARKER, RC_FILES } from "./hooks";
-import { hasCommand, isWindows, openUrl } from "./system";
+import { hasCommand, isWindows, openUrl, runInherit } from "./system";
 import { type Backend, backendLabel, platformKeychain } from "./keychain";
 import { completionFor } from "./completions";
 import {
   HOME,
+  VAULT,
   VERSION,
   type Team,
   type Account,
@@ -41,6 +42,9 @@ import {
   activeAccountName,
   projectDeployment,
   projectEnv,
+  listBackups,
+  restoreBackup,
+  purgeBackups,
 } from "./store";
 import { vaultInitialized, vaultLocked, initVault, destroyVaultMeta, unlock, lock } from "./vault";
 import {
@@ -59,6 +63,7 @@ import {
   type VexMood,
 } from "./ui";
 import { spin } from "./spinner";
+import { accountColorCode } from "./colors";
 import { parseFlags } from "./args";
 
 // --- small helpers ----------------------------------------------------------
@@ -195,10 +200,7 @@ export async function cmdAdd(args: string[]) {
 /** Run `npx convex login --force` interactively, then store the result as `name`. */
 function loginAndStore(name: string, banner: string) {
   console.log(dim(banner));
-  const r = spawnSync("npx", ["--yes", "convex", "login", "--force"], {
-    stdio: "inherit",
-    shell: isWindows,
-  });
+  const r = runInherit("npx", ["--yes", "convex", "login", "--force"], process.env);
   if (r.error) die(`Could not run convex login: ${r.error.message}`);
   if (r.status !== 0) die("convex login did not complete.");
   return cmdAdd([name, "--force"]);
@@ -321,11 +323,21 @@ export function cmdRename(args: string[]) {
   );
 }
 
-export function cmdRm(args: string[]) {
-  const name = parseFlags(args)._[0];
+export async function cmdRm(args: string[]) {
+  const flags = parseFlags(args);
+  const name = flags._[0];
   if (!name) die(`Usage: ${bold("cvx rm <account>")}`);
   const accounts = readAccounts();
   const acc = requireAccount(accounts, name);
+  const nLinks = Object.values(readLinks()).filter((a) => a === name).length;
+  // Confirm on a real terminal (skip with --force/--yes); piped/scripted
+  // callers keep the old immediate behavior.
+  if (process.stdin.isTTY && !flags.force && !flags.yes) {
+    const yn = await ask(
+      `Remove account ${accountColor(name)}${nLinks ? ` and its ${nLinks} link(s)` : ""}? [y/N] `,
+    );
+    if (!/^y(es)?$/i.test(yn)) return console.log(dim("Cancelled — nothing removed."));
+  }
   delete accounts[name];
   writeAccounts(accounts);
   // Remove the OS-keychain secret (if any) only after the vault commit, so a
@@ -342,7 +354,7 @@ export function cmdRm(args: string[]) {
     }
   writeLinks(links);
   console.log(
-    `${green("✓")} Removed account ${bold(name)}${removed ? dim(` (and ${removed} link(s))`) : ""}${vexTag("sad")}`,
+    `${green("✓")} Removed account ${bold(name)}${removed ? dim(` (and ${removed} link(s))`) : ""} ${dim("· cvx undo restores it")}${vexTag("sad")}`,
   );
 }
 
@@ -605,10 +617,29 @@ export function cmdWhich(args: string[]) {
 }
 
 /** prompt — fast, no-network, prints the active account name (for a shell prompt). */
-export function cmdPrompt() {
+export function cmdPrompt(args: string[] = []) {
+  const flags = parseFlags(args);
+  if (flags.starship) {
+    // Ready-to-paste starship config; starship shows the segment only when
+    // `cvx prompt` prints something (i.e. an account is active).
+    process.stdout.write(`# Add to ~/.config/starship.toml — shows the active Convex account.
+[custom.cvx]
+command = "cvx prompt"
+when = "cvx prompt"
+symbol = "\u21c4 "
+format = "[$symbol$output]($style) "
+style = "bold cyan"
+`);
+    return;
+  }
   try {
     const name = readActive();
-    if (name && readAccounts()[name]) process.stdout.write(name);
+    if (name && readAccounts()[name]) {
+      // --color embeds raw ANSI in the account's stable color — an explicit
+      // opt-in exception to output hygiene, for hand-rolled PS1/PROMPT use.
+      if (flags.color) process.stdout.write(`\x1b[1;38;5;${accountColorCode(name)}m${name}\x1b[0m`);
+      else process.stdout.write(name);
+    }
   } catch {
     /* a prompt segment must never error */
   }
@@ -644,11 +675,9 @@ export function cmdRun(args: string[]) {
   if (token == null) die(`Couldn't read the token for ${bold(account)}.`);
 
   const [cmd, ...cmdArgs] = rest;
-  const r = spawnSync(cmd, cmdArgs, {
-    stdio: "inherit",
-    env: { ...process.env, CONVEX_OVERRIDE_ACCESS_TOKEN: token },
-    shell: isWindows, // resolve .cmd shims on Windows
-  });
+  // runInherit resolves .cmd shims itself and never lets cmd.exe re-split
+  // argv — spaced/quoted arguments survive on Windows (see system.ts).
+  const r = runInherit(cmd, cmdArgs, { ...process.env, CONVEX_OVERRIDE_ACCESS_TOKEN: token });
   if (r.error) {
     const err = r.error as NodeJS.ErrnoException;
     if (err.code === "ENOENT") die(`Command not found: ${bold(cmd)}`);
@@ -836,6 +865,7 @@ export function cmdKeychain(args: string[]) {
     migrateStorage(accounts, available);
     writeConfig({ ...cfg, storage: available });
     if (cfg.storage === "passphrase") destroyVaultMeta(); // tokens left the encrypted vault
+    purgeBackups(); // undo history held the plaintext tokens
     const n = Object.keys(accounts).length;
     console.log(
       (n
@@ -878,6 +908,82 @@ function migrateStorage(accounts: Accounts, target: Backend) {
     if (accounts[name].keychain && !next[name].keychain)
       warnIfSecretLeft(name, deleteToken(name, accounts[name]));
   }
+}
+
+// --- undo ---------------------------------------------------------------------
+
+/** "3m ago" / "2h ago" / "5d ago" for undo history. */
+function agoPrecise(iso: string): string {
+  const ms = Date.now() - Date.parse(iso);
+  if (!Number.isFinite(ms) || ms < 0) return "";
+  const m = Math.floor(ms / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  if (m < 1440) return `${Math.floor(m / 60)}h ago`;
+  return `${Math.floor(m / 1440)}d ago`;
+}
+
+/** Counts from a raw snapshot/vault JSON string; "?" when unparseable. */
+function countIn(raw: string | null): string {
+  if (raw == null) return "0";
+  try {
+    return String(Object.keys(JSON.parse(raw)).length);
+  } catch {
+    return "?";
+  }
+}
+
+export async function cmdUndo(args: string[]) {
+  const flags = parseFlags(args);
+  const backups = listBackups();
+
+  if (flags.list) {
+    if (!backups.length)
+      return console.log(dim("No undo history yet — a snapshot is taken before every change."));
+    console.log(bold("Undo history") + dim(" (newest first — `cvx undo` restores the top one)"));
+    for (const b of backups)
+      console.log(`  ${dim(agoPrecise(b.at).padEnd(11))} before ${bold(b.label)}`);
+    return;
+  }
+
+  if (!backups.length) die("Nothing to undo — no snapshots recorded yet.");
+  const b = backups[0];
+
+  // Read current counts raw so undo still works when a vault file is corrupt —
+  // that is exactly the situation undo exists to rescue.
+  const raw = (f: string) => {
+    try {
+      return readFileSync(f, "utf8");
+    } catch {
+      return null;
+    }
+  };
+  const curAccounts = raw(join(VAULT, "accounts.json"));
+  const curLinks = raw(join(VAULT, "links.json"));
+
+  console.log(
+    `Restore the vault to how it was before ${bold(b.label)} ${dim(`(${agoPrecise(b.at)})`)}?`,
+  );
+  console.log(
+    dim(
+      `  accounts ${countIn(curAccounts)} → ${countIn(b.accounts)} · links ${countIn(curLinks)} → ${countIn(b.links)}`,
+    ),
+  );
+  if (!flags.yes) {
+    if (!process.stdin.isTTY)
+      die(`Confirmation needed — re-run with ${bold("--yes")} in scripts.`);
+    const yn = await ask("Restore? [y/N] ");
+    if (!/^y(es)?$/i.test(yn)) return console.log(dim("Cancelled — nothing restored."));
+  }
+
+  restoreBackup(b);
+  console.log(`${green("✓")} Vault restored ${dim(`(to before ${b.label})`)}.${vexTag("happy")}`);
+  console.log(dim("  `cvx undo` again reverses this restore."));
+  if (b.accounts?.includes('"keychain": true'))
+    console.log(
+      yellow("! ") +
+        "restored records reference the OS keychain — a secret deleted from the keychain itself cannot be restored (re-add with `cvx refresh <name>`).",
+    );
 }
 
 // --- vault (passphrase-encrypted tokens) -------------------------------------
@@ -924,6 +1030,7 @@ export async function cmdVault(args: string[]) {
     initVault(await newPassphrase());
     migrateStorage(accounts, "passphrase");
     writeConfig({ ...cfg, storage: "passphrase" });
+    purgeBackups(); // undo history held the plaintext tokens
     console.log(
       `${green("✓")} Tokens encrypted with your passphrase ${dim("(unlocked for this session)")}.${vexTag("wink")}`,
     );

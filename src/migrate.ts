@@ -42,6 +42,9 @@ export const MIGRATION_EXEMPT = new Set<string | undefined>([
   "which",
   "completions",
   "completion",
+  // undo is the recovery path for a broken vault — the migration's vault read
+  // would throw before undo could run, so it must never be gated behind it.
+  "undo",
 ]);
 
 /**

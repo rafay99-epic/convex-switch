@@ -7,7 +7,7 @@
 // Subcommands that take an account name as their first argument.
 const ACCOUNT_CMDS = "link rm rename run refresh use";
 const SUBCOMMANDS =
-  "login add link unlink rm rename activate use scan run open status accounts ls which prompt refresh doctor hook completions keychain vault export import upgrade welcome version help";
+  "login add link unlink rm rename activate use scan run open status accounts ls which prompt refresh doctor hook completions keychain vault export import upgrade undo welcome version help";
 
 const ZSH = `#compdef cvx
 _cvx() {

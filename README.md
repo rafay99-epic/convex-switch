@@ -160,7 +160,8 @@ bun run dev             # runs as work — both live simultaneously
 | `cvx unlink [path]` | Remove a link |
 | `cvx scan [dir] [--depth N] [--yes]` | Auto-discover projects under a dir and link them to accounts by team |
 | `cvx rename <old> <new>` | Rename an account, keeping its links |
-| `cvx rm <account>` | Forget an account and its links |
+| `cvx rm <account>` | Forget an account and its links (asks on a TTY; `--force` skips) |
+| `cvx undo [--list]` | Restore the vault to before the last change — rm, rename, import, scan, all reversible |
 | `cvx use [account]` | Activate by name from anywhere — or this dir's account / an interactive pick |
 | `cvx run <account> -- <cmd>` | Run one command as `<account>` without changing the global login |
 | `cvx open` | Open the Convex dashboard for this project's deployment |
@@ -169,7 +170,7 @@ bun run dev             # runs as work — both live simultaneously
 | `cvx accounts` | List stored accounts (with when each token was last verified) |
 | `cvx ls` | List linked projects |
 | `cvx which [path]` | Print the account name for a dir (scripting) |
-| `cvx prompt` | Print the active account name (for a shell prompt segment) |
+| `cvx prompt [--starship\|--color]` | Prompt segment: bare name · starship config block · ANSI-colored name |
 | `cvx keychain <status\|enable\|disable>` | Store tokens in the OS keychain instead of a file |
 | `cvx vault <status\|encrypt\|decrypt\|unlock\|lock>` | Passphrase-encrypt stored tokens (unlock once per session) |
 | `cvx export [file]` / `cvx import <file>` | Encrypted vault backup / restore — new-machine setup in one command |

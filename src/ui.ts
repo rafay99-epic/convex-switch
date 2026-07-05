@@ -212,10 +212,11 @@ ${h("Everyday")}
 
 ${h("Manage")}
   cvx rename <old> <new>        rename an account, keep its links
-  cvx rm <account>              forget an account (and its links)
+  cvx rm <account>              forget an account (asks first; undo-able)
+  cvx undo [--list]             restore the vault to before the last change
   cvx refresh --all             re-authenticate every stored account
   cvx which [path]              print the account name for a dir (scripting)
-  cvx prompt                    print the active account (for a shell prompt)
+  cvx prompt [--starship]       print the active account · starship config
   cvx keychain <status|…>       store tokens in the OS keychain
   cvx vault <status|…>          passphrase-encrypt stored tokens
   cvx export · import <file>    encrypted vault backup · restore (new machine)

@@ -10,8 +10,11 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   writeFileSync,
   renameSync,
+  rmSync,
+  unlinkSync,
   chmodSync,
   realpathSync,
 } from "node:fs";
@@ -131,11 +134,123 @@ function writeJSON(file: string, data: unknown) {
 }
 
 export const readAccounts = () => readVaultJSON<Accounts>(ACCOUNTS_FILE, {});
-export const writeAccounts = (a: Accounts) => writeJSON(ACCOUNTS_FILE, a);
 export const readLinks = () => readVaultJSON<Links>(LINKS_FILE, {});
-export const writeLinks = (l: Links) => writeJSON(LINKS_FILE, l);
 export const readConfig = () => readVaultJSON<Config>(CONFIG_FILE, {});
-export const writeConfig = (c: Config) => writeJSON(CONFIG_FILE, c);
+export function writeAccounts(a: Accounts) {
+  snapshotOnce();
+  writeJSON(ACCOUNTS_FILE, a);
+}
+export function writeLinks(l: Links) {
+  snapshotOnce();
+  writeJSON(LINKS_FILE, l);
+}
+export function writeConfig(c: Config) {
+  snapshotOnce();
+  writeJSON(CONFIG_FILE, c);
+}
+
+// --- Undo journal -------------------------------------------------------------
+// The FIRST vault mutation of a command snapshots the whole prior state into
+// backups/ (capped), so `cvx undo` can put it back. Hooked inside the write
+// wrappers above, so every mutating command — rm, rename, import, scan,
+// doctor --fix, storage migrations, and anything added later — is covered
+// with zero per-command wiring. writeActive is NOT hooked (hot path,
+// non-critical). ensureVault's first-run writes bypass the wrappers on
+// purpose: an empty brand-new vault isn't worth an undo entry.
+
+const BACKUPS = join(VAULT, "backups");
+const MAX_BACKUPS = 5;
+
+export type VaultBackup = {
+  at: string;
+  label: string;
+  accounts: string | null;
+  links: string | null;
+  config: string | null;
+  active: string | null;
+  file: string;
+};
+
+let snapshotTaken = false;
+function snapshotOnce() {
+  if (snapshotTaken) return;
+  snapshotTaken = true;
+  try {
+    if (!existsSync(ACCOUNTS_FILE)) return; // nothing meaningful to save yet
+    mkdirSync(BACKUPS, { recursive: true, mode: 0o700 });
+    const raw = (f: string) => (existsSync(f) ? readFileSync(f, "utf8") : null);
+    const snap = {
+      at: new Date().toISOString(),
+      label: process.argv.slice(2, 4).join(" ").trim() || "(unknown command)",
+      accounts: raw(ACCOUNTS_FILE),
+      links: raw(LINKS_FILE),
+      config: raw(CONFIG_FILE),
+      active: raw(ACTIVE_FILE),
+    };
+    writeFileAtomic(join(BACKUPS, `${Date.now()}.json`), JSON.stringify(snap, null, 2) + "\n");
+    const files = readdirSync(BACKUPS)
+      .filter((f) => f.endsWith(".json"))
+      .sort();
+    for (const f of files.slice(0, Math.max(0, files.length - MAX_BACKUPS)))
+      unlinkSync(join(BACKUPS, f));
+  } catch {
+    /* the snapshot must never block the actual operation */
+  }
+}
+
+/** Undo history, newest first. Tolerates unreadable entries. */
+export function listBackups(): VaultBackup[] {
+  try {
+    return readdirSync(BACKUPS)
+      .filter((f) => f.endsWith(".json"))
+      .sort()
+      .reverse()
+      .map((f) => {
+        try {
+          return { ...JSON.parse(readFileSync(join(BACKUPS, f), "utf8")), file: join(BACKUPS, f) };
+        } catch {
+          return null;
+        }
+      })
+      .filter((b): b is VaultBackup => b != null);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Restore a backup (and consume it). The current state is snapshotted first,
+ * so an undo can itself be undone. Bypasses the write wrappers deliberately —
+ * raw strings go back exactly as they were.
+ */
+export function restoreBackup(b: VaultBackup) {
+  snapshotOnce();
+  const put = (file: string, content: string | null) => {
+    if (content == null) {
+      try {
+        unlinkSync(file);
+      } catch {}
+    } else writeFileAtomic(file, content);
+  };
+  put(ACCOUNTS_FILE, b.accounts);
+  put(LINKS_FILE, b.links);
+  put(CONFIG_FILE, b.config);
+  put(ACTIVE_FILE, b.active);
+  try {
+    unlinkSync(b.file);
+  } catch {}
+}
+
+/**
+ * Wipe the undo history. Called after tokens move to a MORE protected backend
+ * (vault encrypt, keychain enable) — otherwise backups would keep the old
+ * plaintext tokens on disk, silently defeating the upgrade.
+ */
+export function purgeBackups() {
+  try {
+    rmSync(BACKUPS, { recursive: true, force: true });
+  } catch {}
+}
 
 // --- Token storage backend (file / OS keychain) -----------------------------
 
