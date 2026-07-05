@@ -1,0 +1,21 @@
+scripts/ci-windiag.ts
+  s_d679e3b5467c5a::t_c1d8da71ced2ce 1-55
+.github/workflows/test.yml
+  s_d679e3b5467c5a::t_f458322fd311d0 18-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0c2e92f8bb887959a15a2bf27968119f6e2c0d8d",
+  "prompts": {},
+  "sessions": {
+    "s_d679e3b5467c5a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e026300c-e577-40d9-8080-e0f2676d989b",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
