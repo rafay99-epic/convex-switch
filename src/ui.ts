@@ -1,14 +1,25 @@
 /**
- * ui — everything the user sees: ANSI colors, the logo banner, the first-run
- * welcome, and the help screen. Pure presentation, no fs/network.
+ * ui — everything the user sees: ANSI colors, the gradient logo, Vex the
+ * account chameleon, the first-run welcome, and the help screen. Pure
+ * presentation, no fs/network.
  */
 
 import { VERSION, VAULT, shortPath } from "./store";
 import type { Account } from "./store";
-import { fg256, bold, dim, green, yellow, red, cyan, BANNER_GRADIENT } from "./colors";
+import {
+  bold,
+  dim,
+  green,
+  yellow,
+  red,
+  cyan,
+  fg256,
+  brandLine,
+  accountColorCode,
+} from "./colors";
 
 // Re-export the palette so the rest of the app can import colors from "./ui".
-export { bold, dim, green, yellow, red, cyan } from "./colors";
+export { bold, dim, green, yellow, red, cyan, accountColor } from "./colors";
 
 export function die(msg: string): never {
   console.error(red("✗ ") + msg);
@@ -59,7 +70,7 @@ export function teamLabel(acc: Account): string {
   return dim(acc.teams.map((t) => t.slug).join(", "));
 }
 
-// --- The logo ---------------------------------------------------------------
+// --- The logo (Convex-brand gradient: yellow → red → purple) -----------------
 
 const LOGO = [
   " ██████╗██╗   ██╗██╗  ██╗",
@@ -69,18 +80,74 @@ const LOGO = [
   "╚██████╗ ╚████╔╝ ██╔╝ ██╗",
   " ╚═════╝  ╚═══╝  ╚═╝  ╚═╝ ",
 ];
+
 export function banner(): string {
-  const art = LOGO.map((line, i) => "  " + fg256(BANNER_GRADIENT[i], line)).join("\n");
+  const art = LOGO.map((line, i) => "  " + brandLine(line, i, LOGO.length)).join("\n");
   return `\n${art}\n  ${dim("convex-switch")} ${dim("v" + VERSION)} ${dim(
     "· one terminal, every Convex account",
   )}\n`;
 }
 
+// --- Vex, the account chameleon ----------------------------------------------
+// Small, alive, expressive. A chameleon changes color to match its
+// surroundings; cvx changes your account to match your project — so Vex wears
+// the ACTIVE account's color and her face reacts to what's going on. Her tail
+// is the little `~@` curl.
+
+export type VexMood = "happy" | "wink" | "blink" | "alarm" | "sleepy" | "curious";
+
+const FACE: Record<VexMood, string> = {
+  happy: "(◕‿◕)",
+  wink: "(◕‿<)",
+  blink: "(–‿–)",
+  alarm: "(⊙︵⊙)",
+  sleepy: "(–ᴗ–)ᶻ",
+  curious: "(◕.◕)?",
+};
+
+const VEX_DEFAULT = 114; // resting chameleon green
+
+/** Vex, one glyph tall. Pass an account name to dress her in its color. */
+export function vex(mood: VexMood = "happy", accountName?: string | null): string {
+  const code = accountName ? accountColorCode(accountName) : VEX_DEFAULT;
+  return fg256(code, `${FACE[mood]}~@`);
+}
+
+/**
+ * Welcome intro: Vex blinks and shifts through a few account colors before
+ * settling — chameleons gonna chameleon. TTY-only; pipes get one static line.
+ */
+async function vexIntro(): Promise<void> {
+  const tag = dim("Vex — the account chameleon");
+  if (!process.stdout.isTTY || process.env.NO_COLOR) {
+    console.log(`  ${vex()}  ${tag}\n`);
+    return;
+  }
+  const frames: Array<[VexMood, number]> = [
+    ["blink", VEX_DEFAULT],
+    ["happy", VEX_DEFAULT],
+    ["happy", 45],
+    ["happy", 213],
+    ["happy", 214],
+    ["happy", 141],
+    ["blink", VEX_DEFAULT],
+    ["happy", VEX_DEFAULT],
+  ];
+  process.stdout.write("\x1b[?25l");
+  for (const [mood, code] of frames) {
+    process.stdout.write(`\r  ${fg256(code, FACE[mood] + "~@")}  ${dim("…")}`);
+    await new Promise((r) => setTimeout(r, 130));
+  }
+  process.stdout.write(`\r\x1b[2K\x1b[?25h  ${vex()}  ${tag}\n\n`);
+}
+
 // --- First-run welcome ------------------------------------------------------
 
-export function welcome(): void {
+export async function welcome(): Promise<void> {
   console.log(banner());
-  console.log(`  ${bold("Welcome!")} Run all your Convex accounts across projects at once —
+  await vexIntro();
+  console.log(`  ${bold("Welcome!")} ${dim("Vex turns the color of whatever account is active.")}
+  Run all your Convex accounts across projects at once —
   no login/logout churn, no deploy keys, no tokens in your repos.
 
   ${bold("Get started")} ${dim("(one time)")}
@@ -97,23 +164,25 @@ export function welcome(): void {
 
 // --- Help -------------------------------------------------------------------
 
+const h = (s: string) => bold(cyan(s));
+
 export function help(): void {
   console.log(banner());
   console.log(`  ${dim("switch Convex accounts per project, automatically")}
 
-${bold("Setup")} ${dim("(one-time per account)")}
+${h("Setup")} ${dim("(one-time per account)")}
   npx convex login              log into an account in your browser
   cvx add [name]                store the current login as <name> (verified)
   cvx login <name>              do both: login, then store as <name>
   cvx refresh <account>         re-authenticate an account (refresh its token)
 
-${bold("Wire projects to accounts")}
+${h("Wire projects to accounts")}
   cvx link <account> [path]     link a project dir (default: cwd) to an account
   cvx unlink [path]             remove a link
   cvx hook --install            add the auto-switch hook (zsh/bash/fish/nu/pwsh)
   cvx completions <shell>       print a shell completion script
 
-${bold("Everyday")}
+${h("Everyday")}
   cd <project> && bun run dev   the linked account is activated automatically
   cvx use [account]             activate by name — or pick one if unlinked
   cvx run <account> -- <cmd>    run one command as <account> (no global change)
@@ -122,7 +191,7 @@ ${bold("Everyday")}
   cvx accounts                  list stored accounts (+ last verified)
   cvx ls                        list linked projects
 
-${bold("Manage")}
+${h("Manage")}
   cvx rename <old> <new>        rename an account, keep its links
   cvx rm <account>              forget an account (and its links)
   cvx refresh --all             re-authenticate every stored account
