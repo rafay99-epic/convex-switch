@@ -1,0 +1,314 @@
+/**
+ * End-to-end tests: spawn the real CLI (`bun bin/cvx.ts`) against a throwaway
+ * CVX_HOME. Covers every command's observable behavior except the three flows
+ * that can't run headless/sandboxed: real `login`/`refresh` (browser), the
+ * interactive migration prompt (needs a PTY), and `keychain enable` (per-user
+ * OS keychain). See CLAUDE.md "Safety rules".
+ */
+import { beforeAll, describe, expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+const ROOT = join(import.meta.dir, "..");
+const BIN = join(ROOT, "bin", "cvx.ts");
+const HOME = mkdtempSync(join(tmpdir(), "cvx-e2e."));
+const PROJ = join(HOME, "proj");
+const NESTED = join(PROJ, "nested");
+
+const ACCOUNTS = join(HOME, ".convex-switch", "accounts.json");
+const LINKS = join(HOME, ".convex-switch", "links.json");
+const CONFIG = join(HOME, ".convex-switch", "config.json");
+const ACTIVE = join(HOME, ".convex-switch", "active");
+const CONVEX_CFG = join(HOME, ".convex", "config.json");
+
+// A stub opener (both names, so tests pass on macOS and Linux) that fails,
+// making `cvx open` fall back to printing the URL instead of launching a browser.
+const STUB_BIN = join(HOME, "stub-bin");
+
+function cvx(
+  args: string[],
+  opts: { cwd?: string; stdin?: string; env?: Record<string, string> } = {},
+) {
+  // process.execPath = the running bun binary — immune to PATH overrides below.
+  const r = spawnSync(process.execPath, [BIN, ...args], {
+    cwd: opts.cwd ?? ROOT,
+    encoding: "utf8",
+    input: opts.stdin ?? "", // piped stdin → never a TTY
+    env: { ...process.env, CVX_HOME: HOME, NO_COLOR: "1", ...opts.env },
+  });
+  return { code: r.status, out: r.stdout ?? "", err: r.stderr ?? "", all: (r.stdout ?? "") + (r.stderr ?? "") };
+}
+
+function seedAccounts() {
+  writeFileSync(
+    ACCOUNTS,
+    JSON.stringify({
+      work: { token: "tok-work-AAA", teams: [{ slug: "wt", name: "WT" }], addedAt: "2026-01-01" },
+      personal: { token: "tok-pers-BBB", teams: [{ slug: "me", name: "Me" }], addedAt: "2026-01-01" },
+    }),
+  );
+  writeFileSync(LINKS, "{}");
+  writeFileSync(CONFIG, JSON.stringify({ schemaVersion: 2 }));
+}
+
+beforeAll(() => {
+  mkdirSync(NESTED, { recursive: true });
+  mkdirSync(STUB_BIN, { recursive: true });
+  for (const name of ["open", "xdg-open"]) {
+    writeFileSync(join(STUB_BIN, name), "#!/bin/sh\nexit 3\n");
+    chmodSync(join(STUB_BIN, name), 0o755);
+  }
+  cvx(["version"]); // first run creates the vault
+});
+
+describe("basics", () => {
+  test("version prints the dev placeholder", () => {
+    const r = cvx(["version"]);
+    expect(r.code).toBe(0);
+    expect(r.out.trim()).toBe("0.0.0-dev");
+  });
+  test("help exits 0 and lists commands", () => {
+    const r = cvx(["help"]);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("cvx link <account>");
+  });
+  test("unknown command exits 1", () => {
+    const r = cvx(["nosuchcmd"]);
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("Unknown command");
+  });
+  test("vault dir is 700, files are 600", () => {
+    expect(statSync(join(HOME, ".convex-switch")).mode & 0o777).toBe(0o700);
+    expect(statSync(ACCOUNTS).mode & 0o777).toBe(0o600);
+  });
+});
+
+describe("link / which / ls / unlink", () => {
+  test("link, which, ls round-trip", () => {
+    seedAccounts();
+    expect(cvx(["link", "work", PROJ]).code).toBe(0);
+    const w = cvx(["which", PROJ]);
+    expect(w.code).toBe(0);
+    expect(w.out.trim()).toBe("work");
+    expect(cvx(["ls"]).out).toContain("work");
+  });
+  test("boolean flag before the account name does not swallow it", () => {
+    expect(cvx(["link", "--force", "personal", NESTED]).code).toBe(0);
+    expect(cvx(["which", NESTED]).out.trim()).toBe("personal");
+  });
+  test("which on an unlinked dir exits 1", () => {
+    expect(cvx(["which", tmpdir()]).code).toBe(1);
+  });
+  test("linking an unknown account dies", () => {
+    const r = cvx(["link", "ghost", PROJ]);
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("Unknown account");
+  });
+  test("unlink removes; second unlink dies", () => {
+    const extra = join(HOME, "extra");
+    mkdirSync(extra, { recursive: true });
+    cvx(["link", "work", extra]);
+    expect(cvx(["unlink", extra]).code).toBe(0);
+    expect(cvx(["unlink", extra]).code).toBe(1);
+  });
+});
+
+describe("activate / status / prompt / accounts", () => {
+  test("activate swaps the global config and writes a fingerprinted marker", () => {
+    seedAccounts();
+    cvx(["link", "work", PROJ]);
+    const r = cvx(["activate", PROJ]);
+    expect(r.code).toBe(0);
+    expect(JSON.parse(readFileSync(CONVEX_CFG, "utf8")).accessToken).toBe("tok-work-AAA");
+    const [name, fp] = readFileSync(ACTIVE, "utf8").split("\n");
+    expect(name).toBe("work");
+    expect(fp).toMatch(/^[0-9a-f]{16}$/);
+  });
+  test("re-activate reports already active", () => {
+    expect(cvx(["activate", PROJ]).out).toContain("already active");
+  });
+  test("nested dir activates its own closer link", () => {
+    cvx(["link", "personal", NESTED]);
+    cvx(["activate", NESTED]);
+    expect(JSON.parse(readFileSync(CONVEX_CFG, "utf8")).accessToken).toBe("tok-pers-BBB");
+  });
+  test("activate -q on an unlinked dir prints nothing", () => {
+    const r = cvx(["activate", "-q", tmpdir()]);
+    expect(r.code).toBe(0);
+    expect(r.all.trim()).toBe("");
+  });
+  test("status --json reports active + link", () => {
+    cvx(["activate", PROJ]);
+    const s = JSON.parse(cvx(["status", "--json"], { cwd: PROJ }).out);
+    expect(s.active).toBe("work");
+    expect(s.linked).toBe("work");
+    expect(s.loggedIn).toBe(true);
+  });
+  test("prompt prints the active account name", () => {
+    expect(cvx(["prompt"]).out).toBe("work");
+  });
+  test("accounts lists all; --names is bare", () => {
+    expect(cvx(["accounts"]).out).toContain("personal");
+    expect(cvx(["accounts", "--names"]).out.trim().split("\n").sort()).toEqual(["personal", "work"]);
+  });
+});
+
+describe("run", () => {
+  test("passes the token via env and propagates the exit code", () => {
+    seedAccounts();
+    const r = cvx(["run", "work", "--", "/bin/sh", "-c", "echo T=$CONVEX_OVERRIDE_ACCESS_TOKEN"]);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("T=tok-work-AAA");
+    expect(cvx(["run", "work", "--", "/bin/sh", "-c", "exit 7"]).code).toBe(7);
+  });
+  test("errors: no command / unknown account", () => {
+    expect(cvx(["run", "work"]).code).toBe(1);
+    expect(cvx(["run", "ghost", "--", "echo", "hi"]).err).toContain("Unknown account");
+  });
+});
+
+describe("rename / rm", () => {
+  test("rename moves links and the active marker", () => {
+    seedAccounts();
+    cvx(["link", "work", PROJ]);
+    cvx(["activate", PROJ]);
+    const r = cvx(["rename", "work", "office"]);
+    expect(r.code).toBe(0);
+    expect(cvx(["which", PROJ]).out.trim()).toBe("office");
+    expect(readFileSync(ACTIVE, "utf8").split("\n")[0]).toBe("office");
+  });
+  test("__proto__ is rejected and the vault is intact", () => {
+    const r = cvx(["rename", "office", "__proto__"]);
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("Invalid account name");
+    expect(Object.keys(JSON.parse(readFileSync(ACCOUNTS, "utf8")))).toContain("office");
+  });
+  test("rm deletes the account and its links", () => {
+    cvx(["link", "personal", NESTED]);
+    expect(cvx(["rm", "personal"]).code).toBe(0);
+    expect(JSON.parse(readFileSync(ACCOUNTS, "utf8")).personal).toBeUndefined();
+    // nested resolves up-tree to the parent link now
+    expect(cvx(["which", NESTED]).out.trim()).toBe("office");
+  });
+});
+
+describe("add — argument validation (no network on failure paths)", () => {
+  test("--token without a value dies with usage", () => {
+    seedAccounts();
+    const r = cvx(["add", "foo", "--token"]);
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("--token needs a value");
+  });
+  test("--token followed by a flag is treated as missing", () => {
+    expect(cvx(["add", "foo", "--token", "--force"]).err).toContain("--token needs a value");
+  });
+  test("a NEW invalid name dies before the network round-trip", () => {
+    const r = cvx(["add", "_newbad", "--token", "x"]);
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("Invalid account name");
+  });
+  test("an EXISTING legacy name is grandfathered past validation", () => {
+    const accounts = JSON.parse(readFileSync(ACCOUNTS, "utf8"));
+    accounts["_legacy"] = { token: "tok-legacy", teams: [], addedAt: "2025-01-01" };
+    writeFileSync(ACCOUNTS, JSON.stringify(accounts));
+    // Reaches token verification (network) — fails there, NOT on the name.
+    const r = cvx(["add", "_legacy", "--token", "bogus"]);
+    expect(r.code).toBe(1);
+    expect(r.err).not.toContain("Invalid account name");
+  });
+});
+
+describe("migration", () => {
+  test("legacy vault with accounts: non-TTY defers (no prompt, no stamp)", () => {
+    seedAccounts();
+    writeFileSync(CONFIG, "{}");
+    const r = cvx(["ls"]);
+    expect(r.code).toBe(0);
+    expect(r.all).not.toContain("migrate");
+    expect(readFileSync(CONFIG, "utf8").trim()).toBe("{}");
+  });
+  test("exempt commands never prompt on a legacy vault", () => {
+    for (const args of [["activate", "-q"], ["which", PROJ], ["prompt"], ["accounts", "--names"]]) {
+      expect(cvx(args).all).not.toContain("migrate");
+    }
+  });
+  test("empty legacy vault stamps the schema silently", () => {
+    writeFileSync(ACCOUNTS, "{}");
+    writeFileSync(CONFIG, "{}");
+    cvx(["ls"]);
+    expect(JSON.parse(readFileSync(CONFIG, "utf8")).schemaVersion).toBe(2);
+  });
+});
+
+describe("corrupt vault", () => {
+  test("clean one-line error, stack only with CVX_DEBUG", () => {
+    seedAccounts();
+    writeFileSync(ACCOUNTS, "{broken");
+    const r = cvx(["accounts"]);
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("corrupted");
+    expect(r.err).not.toContain("at "); // no stack frames
+    expect(cvx(["accounts"], { env: { CVX_DEBUG: "1" } }).err).toContain("at ");
+    seedAccounts();
+  });
+  test("doctor distinguishes a corrupt links.json from the accounts vault", () => {
+    writeFileSync(LINKS, "{broken");
+    const r = cvx(["doctor", "--no-tokens"]);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("links.json corrupted");
+    writeFileSync(LINKS, "{}");
+  });
+});
+
+describe("doctor / completions / hook", () => {
+  test("doctor --no-tokens runs offline and reports plain-file storage", () => {
+    seedAccounts();
+    const r = cvx(["doctor", "--no-tokens"]);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("plain file (chmod 600)");
+  });
+  test("completions exist for all four shells; nu gets a specific message", () => {
+    for (const sh of ["zsh", "bash", "fish", "powershell"]) {
+      const r = cvx(["completions", sh]);
+      expect(r.code).toBe(0);
+      expect(r.out.length).toBeGreaterThan(100);
+    }
+    expect(cvx(["completions", "nu"]).err).toContain("Nushell");
+    expect(cvx(["completions", "klingon"]).code).toBe(1);
+  });
+  test("hook prints a marked snippet for every shell", () => {
+    for (const sh of ["zsh", "bash", "fish", "nu", "powershell"]) {
+      const r = cvx(["hook", "--shell", sh]);
+      expect(r.code).toBe(0);
+      expect(r.out).toContain("convex-switch");
+      expect(r.out).toContain("cvx activate -q");
+    }
+    expect(cvx(["hook", "--shell", "klingon"]).code).toBe(1);
+  });
+  test("hook --install writes the sandbox rc once, idempotently", () => {
+    expect(cvx(["hook", "--install", "--shell", "zsh"]).code).toBe(0);
+    expect(cvx(["hook", "--install", "--shell", "zsh"]).out).toContain("already present");
+    const rc = readFileSync(join(HOME, ".zshrc"), "utf8");
+    expect(rc.split("# --- convex-switch").length - 1).toBe(1);
+    // doctor now sees the hook
+    expect(cvx(["doctor", "--no-tokens"]).out).toMatch(/shell hook\s+installed/);
+  });
+});
+
+describe("open (stubbed opener — never launches a browser)", () => {
+  const env = { PATH: `${STUB_BIN}:/usr/bin:/bin` };
+  test("prints the deployment URL when the opener fails", () => {
+    writeFileSync(join(PROJ, ".env.local"), "CONVEX_DEPLOYMENT=dev:happy-otter-123\n");
+    const r = cvx(["open", PROJ], { env });
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("https://dashboard.convex.dev/d/happy-otter-123");
+  });
+  test("rejects a malicious deployment value (injection guard)", () => {
+    writeFileSync(join(PROJ, ".env.local"), "CONVEX_DEPLOYMENT=dev:evil&calc\n");
+    const r = cvx(["open", PROJ], { env });
+    expect(r.all).not.toContain("evil");
+    expect(r.err).toContain("https://dashboard.convex.dev");
+  });
+});
