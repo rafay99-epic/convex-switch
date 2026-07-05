@@ -1,0 +1,23 @@
+README.md
+  s_d679e3b5467c5a::t_ba4eede93bc252 215-234
+scripts/sandbox.sh
+  s_d679e3b5467c5a::t_ff33c29e72ccce 1-41
+src/store.ts
+  s_d679e3b5467c5a::t_adc40eb2396f14 33-41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "fd83852da2c91d10781adace792131a55f956540",
+  "prompts": {},
+  "sessions": {
+    "s_d679e3b5467c5a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e026300c-e577-40d9-8080-e0f2676d989b",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
