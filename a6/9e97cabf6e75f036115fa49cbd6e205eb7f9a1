@@ -1,0 +1,19 @@
+src/system.ts
+  s_d679e3b5467c5a::t_33cddd19d1860b 9-10,68,76-77,79-101,111
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a69e97cabf6e75f036115fa49cbd6e205eb7f9a1",
+  "prompts": {},
+  "sessions": {
+    "s_d679e3b5467c5a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e026300c-e577-40d9-8080-e0f2676d989b",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
