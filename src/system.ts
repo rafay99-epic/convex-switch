@@ -6,6 +6,8 @@
  */
 
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 
 export const isWindows = process.platform === "win32";
 
@@ -63,7 +65,7 @@ export function quoteForCmd(arg: string): string {
  * re-splits it, shredding any argument that contains a space or quote.
  *
  *  - POSIX: spawn directly, no shell — args pass through verbatim (unchanged).
- *  - Windows: resolve the executable via Bun.which.
+ *  - Windows: resolve the executable via PATH + PATHEXT (resolveWindowsCommand).
  *      * `.cmd`/`.bat` shims (e.g. npx.cmd) are not executable images and can
  *        only run through cmd.exe, so we build ONE verbatim command line
  *        (each token quoted via quoteForCmd) and hand it to
@@ -71,9 +73,32 @@ export function quoteForCmd(arg: string): string {
  *        doesn't re-quote it. The outer `"…"` is what `/s` strips.
  *      * a real `.exe` / extensionless native binary skips the shell entirely,
  *        so its arguments arrive verbatim.
- *    A null from Bun.which falls back to the raw cmd, letting spawnSync raise
- *    ENOENT which cmdRun already reports as "Command not found".
+ *    An unresolvable name falls through as-is, letting spawnSync raise ENOENT
+ *    which cmdRun already reports as "Command not found".
  */
+/**
+ * Resolve a bare command name on Windows via PATH + PATHEXT, the way cmd.exe
+ * itself does. Bun.which only finds executable IMAGES (.exe) — npx and most
+ * Node-tool entry points are .cmd shims it never sees. Returns the input
+ * untouched when it already contains a path separator (trust the caller) or
+ * when nothing matches (spawnSync then surfaces ENOENT, which cmdRun reports
+ * as "Command not found").
+ */
+function resolveWindowsCommand(cmd: string): string {
+  if (/[\\/]/.test(cmd)) return cmd;
+  const dirs = (process.env.PATH ?? "").split(";").filter(Boolean);
+  const hasExt = /\.[^\\/.]+$/.test(cmd);
+  const exts = hasExt
+    ? [""]
+    : (process.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").split(";").filter(Boolean);
+  for (const dir of dirs)
+    for (const ext of exts) {
+      const f = join(dir, cmd + ext);
+      if (existsSync(f)) return f;
+    }
+  return cmd;
+}
+
 export function runInherit(
   cmd: string,
   args: string[],
@@ -83,7 +108,7 @@ export function runInherit(
     return spawnSync(cmd, args, { stdio: "inherit", env });
   }
 
-  const resolved = Bun.which(cmd) ?? cmd;
+  const resolved = resolveWindowsCommand(cmd);
   const lower = resolved.toLowerCase();
   if (lower.endsWith(".cmd") || lower.endsWith(".bat")) {
     const line = [resolved, ...args].map(quoteForCmd).join(" ");
