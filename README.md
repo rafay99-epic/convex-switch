@@ -46,9 +46,12 @@ The Convex CLI decides *which account you are* by reading a single global file:
 ```
 
 `cvx` keeps a private vault of your account tokens and a map of
-project → account. A `chpwd` shell hook calls `cvx activate` on every `cd`;
-when you enter a linked folder it rewrites that one global file to the linked
-account. Nothing is injected at runtime, nothing lives in your repos.
+project → account. A shell hook calls `cvx activate` on every `cd`, and also
+re-checks at the prompt so a second terminal swapping the global file gets
+noticed — a spawn-free freshness check means nothing runs on a normal prompt.
+When you enter a linked folder (or the check trips) it rewrites that one
+global file to the linked account. Nothing is injected at runtime, nothing
+lives in your repos.
 
 ```
 ~/.convex-switch/
@@ -89,7 +92,10 @@ Prebuilt binaries: **macOS** (arm64/x64), **Linux** (arm64/x64), **Windows**
 (x64). Auto-switching works on **zsh, bash, and PowerShell** — `cvx hook
 --install` detects your shell (PowerShell on Windows) and wires the hook into
 the right startup file (`~/.zshrc`, `~/.bashrc`, or your PowerShell `$PROFILE`).
-Force one with `cvx hook --install --shell powershell`.
+Force one with `cvx hook --install --shell powershell`. Working in several
+terminals at once? Every hook also re-syncs at the prompt when another
+session has swapped the global config, so a terminal left sitting in a
+project reclaims its own account the moment you're back typing in it.
 
 **From source** (Bun):
 
@@ -149,6 +155,14 @@ cd ~/Code/project-b     # ⇄ convex account → work
 bun run dev             # runs as work — both live simultaneously
 ```
 
+Working across several terminals on different accounts at once, and one of
+them sat idle while another swapped the global config? You don't need to
+`cd` out and back in — the prompt-time resync notices and reclaims the right
+account the moment you're back typing in that session. For a process that
+needs to keep running under its own account while another terminal is
+actively switching things, skip the global config entirely with
+`cvx run <account> -- <cmd>` (per-command token, no swap).
+
 ## Commands
 
 | Command | What it does |
@@ -177,7 +191,7 @@ bun run dev             # runs as work — both live simultaneously
 | `cvx upgrade` | Check for a newer release and print the exact upgrade command |
 | `cvx doctor [--fix]` | Check setup + per-account token health (`--fix` repairs hook/links/marker/tokens) |
 | `cvx completions <shell>` | Print a completion script (zsh/bash/fish/powershell) |
-| `cvx hook [--install] [--shell …]` | Install the cd-hook (zsh/bash/fish/nu/powershell) |
+| `cvx hook [--install] [--shell …]` | Install the shell hook (zsh/bash/fish/nu/powershell); `--install` also upgrades an outdated installed hook in place |
 
 ### Run a command as another account, without switching
 
@@ -300,5 +314,7 @@ release still builds and publishes, only the formula bump is skipped.
   never in `.env.local`, no deploy keys.
 - To rotate/refresh an account, `npx convex login` into it again then
   `cvx add <name> --force`.
-- Non-zsh shells: run `cvx hook` and adapt the snippet to your shell's
-  directory-change hook.
+- Unsupported shells: run `cvx hook` and adapt the snippet to your shell's
+  directory-change hook, plus a prompt hook that re-runs `cvx activate` when
+  the global config file is newer than a per-shell stamp — that's what
+  catches another terminal switching accounts out from under you.

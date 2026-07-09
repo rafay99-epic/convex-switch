@@ -1,11 +1,11 @@
 /** commands — one function per subcommand. Glue between store + ui. */
 
-import { existsSync, statSync, readFileSync, readdirSync, appendFileSync, mkdirSync } from "node:fs";
+import { existsSync, statSync, readFileSync, readdirSync, appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 
-import { type Shell, hookFor, detectShell, SHELLS, HOOK_MARKER, RC_FILES } from "./hooks";
+import { type Shell, hookFor, detectShell, SHELLS, HOOK_MARKER, RC_FILES, replaceHookBlock } from "./hooks";
 import { hasCommand, isWindows, openUrl, runInherit } from "./system";
 import { type Backend, backendLabel, platformKeychain } from "./keychain";
 import { completionFor } from "./completions";
@@ -1123,10 +1123,27 @@ export async function cmdDoctor(args: string[] = []) {
   const active = vaultOk ? activeAccountName(accounts) : null;
   console.log(`  ${warn(!!active)} active account    ${active ? dim(active) : dim("none active")}`);
 
-  const rcs = Object.values(RC_FILES).map((f) => join(HOME, f));
-  const hooked = rcs.some((rc) => existsSync(rc) && readFileSync(rc, "utf8").includes(HOOK_MARKER));
+  // Hook presence AND freshness: an rc still carrying an older snippet keeps
+  // the old cd-only behavior even after the binary upgrades — flag it.
+  let hooked = false;
+  const staleHooks: Exclude<Shell, "powershell">[] = [];
+  for (const [sh, f] of Object.entries(RC_FILES) as [Exclude<Shell, "powershell">, string][]) {
+    const rc = join(HOME, f);
+    if (!existsSync(rc)) continue;
+    const body = readFileSync(rc, "utf8");
+    if (!body.includes(HOOK_MARKER)) continue;
+    hooked = true;
+    const swapped = replaceHookBlock(body, hookFor(sh));
+    if (!swapped || swapped.changed) staleHooks.push(sh);
+  }
   console.log(
-    `  ${warn(hooked)} shell hook        ${hooked ? dim("installed") : yellow("not installed — run `cvx hook --install`")}`,
+    `  ${warn(hooked && !staleHooks.length)} shell hook        ${
+      hooked
+        ? staleHooks.length
+          ? yellow("outdated — run `cvx hook --install` (or `cvx doctor --fix`)")
+          : dim("installed")
+        : yellow("not installed — run `cvx hook --install`")
+    }`,
   );
 
   // Token health — pings Convex for each account (skip with --no-tokens).
@@ -1182,13 +1199,23 @@ export async function cmdDoctor(args: string[] = []) {
     };
 
     // Shell hook missing → install it for the detected shell.
+    // Present but outdated → swap the block for the current snippet.
     if (!hooked) {
       const shell = detectShell();
       if (shell === "powershell") {
         installPwsh(hookFor("powershell"));
         fixed("installed the PowerShell cd-hook");
-      } else if (installHookInto(shell)) {
+      } else if (installHookInto(shell) === "added") {
         fixed(`installed the ${shell} cd-hook into ${shortPath(join(HOME, RC_FILES[shell]))}`);
+      }
+    } else {
+      for (const sh of staleHooks) {
+        const r = installHookInto(sh);
+        if (r === "updated") fixed(`updated the ${sh} hook in ${shortPath(join(HOME, RC_FILES[sh]))}`);
+        else if (r === "manual")
+          console.log(
+            dim(`      → the ${sh} hook block in ${shortPath(join(HOME, RC_FILES[sh]))} is incomplete — reinstall it by hand (cvx hook)`),
+          );
       }
     }
 
@@ -1266,26 +1293,49 @@ export function cmdHook(args: string[]) {
   if (shell === "powershell") return installPwsh(snippet);
 
   const rc = join(HOME, RC_FILES[shell]);
-  if (installHookInto(shell)) {
-    console.log(`${green("✓")} Added hook to ${cyan(shortPath(rc))}.${vexTag("happy")}`);
-    console.log(dim(`  Open a new terminal to activate it.`));
-  } else {
-    console.log(yellow(`Hook already present in ${shortPath(rc)} — nothing to do.`));
+  switch (installHookInto(shell)) {
+    case "added":
+      console.log(`${green("✓")} Added hook to ${cyan(shortPath(rc))}.${vexTag("happy")}`);
+      console.log(dim(`  Open a new terminal to activate it.`));
+      break;
+    case "updated":
+      console.log(`${green("✓")} Updated the hook in ${cyan(shortPath(rc))}.${vexTag("happy")}`);
+      console.log(dim(`  Open a new terminal to pick up the new version.`));
+      break;
+    case "unchanged":
+      console.log(yellow(`Hook already up to date in ${shortPath(rc)} — nothing to do.`));
+      break;
+    case "manual":
+      console.log(
+        yellow(`Found a ${HOOK_MARKER} marker in ${shortPath(rc)} but not a complete hook block.`) +
+          `\n  Remove the old lines, then re-run ${bold("cvx hook --install")} (or paste ${bold("cvx hook")}'s output).`,
+      );
   }
 }
 
+type InstallResult = "added" | "updated" | "unchanged" | "manual";
+
 /**
- * Append the cd-hook to `shell`'s rc file. Returns true if newly added, false
- * if it was already present. Shared by `cvx hook --install` and `doctor --fix`
- * (powershell has no fixed rc path — it uses installPwsh instead).
+ * Write the cd-hook into `shell`'s rc file: appended when absent, swapped in
+ * place when an older block is installed (so binary upgrades can ship hook
+ * fixes), left alone when already current. "manual" = a marker is present but
+ * the block is incomplete (hand-edited) — never rewrite those. Shared by
+ * `cvx hook --install` and `doctor --fix` (powershell has no fixed rc path —
+ * it uses installPwsh instead).
  */
-function installHookInto(shell: Exclude<Shell, "powershell">): boolean {
+function installHookInto(shell: Exclude<Shell, "powershell">): InstallResult {
   const rc = join(HOME, RC_FILES[shell]);
   const body = existsSync(rc) ? readFileSync(rc, "utf8") : "";
-  if (body.includes(HOOK_MARKER)) return false;
+  if (body.includes(HOOK_MARKER)) {
+    const swapped = replaceHookBlock(body, hookFor(shell));
+    if (!swapped) return "manual";
+    if (!swapped.changed) return "unchanged";
+    writeFileSync(rc, swapped.body);
+    return "updated";
+  }
   mkdirSync(dirname(rc), { recursive: true });
   appendFileSync(rc, "\n" + hookFor(shell));
-  return true;
+  return "added";
 }
 
 function installPwsh(snippet: string) {
@@ -1303,7 +1353,19 @@ function installPwsh(snippet: string) {
   }
   const body = existsSync(profile) ? readFileSync(profile, "utf8") : "";
   if (body.includes(HOOK_MARKER)) {
-    console.log(yellow(`Hook already present in ${profile} — nothing to do.`));
+    const swapped = replaceHookBlock(body, snippet);
+    if (swapped?.changed) {
+      writeFileSync(profile, swapped.body);
+      console.log(`${green("✓")} Updated the hook in ${cyan(profile)}.${vexTag("happy")}`);
+      console.log(dim("  Open a new PowerShell window to pick up the new version."));
+    } else if (swapped) {
+      console.log(yellow(`Hook already up to date in ${profile} — nothing to do.`));
+    } else {
+      console.log(
+        yellow(`Found a ${HOOK_MARKER} marker in ${profile} but not a complete hook block.`) +
+          `\n  Remove the old lines, then re-run ${bold("cvx hook --install")}.`,
+      );
+    }
     return;
   }
   mkdirSync(dirname(profile), { recursive: true });
