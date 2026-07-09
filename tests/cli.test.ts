@@ -328,15 +328,59 @@ describe("doctor / completions / hook", () => {
       expect(r.out).toContain("convex-switch");
       expect(r.out).toContain("cvx activate -q");
     }
+    // zsh/bash/fish re-sync at the prompt via a builtin -nt check against a
+    // per-shell stamp file (no spawn on the hot path); zsh also wires precmd.
+    for (const sh of ["zsh", "bash", "fish"]) {
+      const r = cvx(["hook", "--shell", sh]);
+      expect(r.out).toContain("-nt");
+      expect(r.out).toMatch(/stamp/i);
+    }
+    expect(cvx(["hook", "--shell", "zsh"]).out).toContain("add-zsh-hook precmd _convex_switch_precmd");
     expect(cvx(["hook", "--shell", "klingon"]).code).toBe(1);
   });
   test("hook --install writes the sandbox rc once, idempotently", () => {
     expect(cvx(["hook", "--install", "--shell", "zsh"]).code).toBe(0);
-    expect(cvx(["hook", "--install", "--shell", "zsh"]).out).toContain("already present");
+    expect(cvx(["hook", "--install", "--shell", "zsh"]).out).toContain("already up to date");
     const rc = readFileSync(join(HOME, ".zshrc"), "utf8");
     expect(rc.split("# --- convex-switch").length - 1).toBe(1);
     // doctor now sees the hook
     expect(cvx(["doctor", "--no-tokens"]).out).toMatch(/shell hook\s+installed/);
+  });
+  test("hook --install upgrades an outdated block in place", () => {
+    const zshrc = join(HOME, ".zshrc");
+    const before = "# my own stuff, before the block\nalias gs='git status'\n";
+    const after = "# my own stuff, after the block\nexport EDITOR=vim\n";
+    const oldBlock =
+      "# --- convex-switch ---------------------------------------------------------\n" +
+      "_convex_switch_hook() { command cvx activate -q 2>/dev/null }\n" +
+      "# --- end convex-switch -----------------------------------------------------\n";
+    writeFileSync(zshrc, before + oldBlock + after);
+
+    const r = cvx(["hook", "--install", "--shell", "zsh"]);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("Updated the hook");
+
+    const rc = readFileSync(zshrc, "utf8");
+    expect(rc.split("# --- convex-switch").length - 1).toBe(1); // exactly one block
+    expect(rc).toContain("_convex_switch_precmd");
+    expect(rc).not.toContain("_convex_switch_hook() { command cvx activate -q 2>/dev/null }");
+    expect(rc.startsWith(before)).toBe(true);
+    expect(rc.endsWith(after)).toBe(true);
+  });
+  test("doctor flags an outdated hook block", () => {
+    const zshrc = join(HOME, ".zshrc");
+    const oldBlock =
+      "# --- convex-switch ---------------------------------------------------------\n" +
+      "_convex_switch_hook() { command cvx activate -q 2>/dev/null }\n" +
+      "# --- end convex-switch -----------------------------------------------------\n";
+    writeFileSync(zshrc, oldBlock);
+
+    const r = cvx(["doctor", "--no-tokens"]);
+    expect(r.out).toMatch(/shell hook\s+outdated/);
+
+    const r2 = cvx(["doctor", "--fix", "--no-tokens"]);
+    expect(r2.out).toContain("fixed: updated the zsh hook");
+    expect(readFileSync(zshrc, "utf8")).toContain("_convex_switch_precmd");
   });
 });
 
