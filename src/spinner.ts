@@ -27,9 +27,16 @@ export function spin(label: string): Spinner {
     process.stdout.write(`\r${fg256(114, FRAMES[i++ % FRAMES.length])} ${dim(label)}`);
   draw();
   const timer = setInterval(draw, 140);
+  // Ctrl-C mid-spin must not leave the terminal with a hidden cursor.
+  const onSigint = () => {
+    process.stdout.write("\r\x1b[2K\x1b[?25h");
+    process.exit(130);
+  };
+  process.once("SIGINT", onSigint);
   return {
     stop(finalLine) {
       clearInterval(timer);
+      process.removeListener("SIGINT", onSigint);
       process.stdout.write(`\r\x1b[2K\x1b[?25h${finalLine}\n`);
     },
   };

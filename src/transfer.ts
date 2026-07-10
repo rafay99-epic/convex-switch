@@ -6,11 +6,12 @@
  * be unit-tested without a TTY or a live keychain.
  */
 
-import { existsSync, readFileSync, writeFileSync, chmodSync } from "node:fs";
+import { existsSync, readFileSync, chmodSync } from "node:fs";
 import { encrypt, decrypt, deriveKey, newSalt } from "./crypto";
 import {
   readAccounts,
   writeAccounts,
+  writeFileAtomic,
   readLinks,
   writeLinks,
   tokenOf,
@@ -65,7 +66,17 @@ export function unpackVault(passphrase: string, blob: string): Payload | null {
   if (plain == null) return null;
   try {
     const payload = JSON.parse(plain) as Payload;
-    return { accounts: payload.accounts ?? {}, links: payload.links ?? {} };
+    // Validate the decrypted shape too: a decryptable-but-malformed archive
+    // must not import as garbage tokenless accounts.
+    const isObj = (v: unknown): v is Record<string, unknown> =>
+      v != null && typeof v === "object" && !Array.isArray(v);
+    const accounts = payload?.accounts ?? {};
+    const links = payload?.links ?? {};
+    if (!isObj(accounts) || !isObj(links)) return null;
+    for (const inc of Object.values(accounts))
+      if (!isObj(inc) || typeof inc.token !== "string") return null;
+    for (const name of Object.values(links)) if (typeof name !== "string") return null;
+    return { accounts: accounts as Payload["accounts"], links: links as Links };
   } catch {
     return null;
   }
@@ -93,7 +104,7 @@ export async function cmdExport(args: string[]) {
   if (!nAcc) die("No accounts to export. Run `cvx login <name>` first.");
 
   const blob = packVault(await exportPassphrase());
-  writeFileSync(file, blob, { mode: 0o600 });
+  writeFileAtomic(file, blob);
   try {
     chmodSync(file, 0o600);
   } catch {}
@@ -140,6 +151,9 @@ export async function cmdImport(args: string[]) {
     try {
       rec = makeTokenRecord(backend, name, inc.token);
     } catch (e) {
+      // Accounts imported before this one already have secrets in the OS
+      // keychain — persist them so nothing live is left orphaned and untracked.
+      if (added + overwritten) writeAccounts(accounts);
       die(`Couldn't store the token for ${bold(name)}: ${(e as Error).message}`);
     }
     accounts[name] = {

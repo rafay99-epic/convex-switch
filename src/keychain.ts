@@ -50,7 +50,18 @@ export function backendLabel(b: Backend): string {
 
 // --- macOS -----------------------------------------------------------------
 function macSet(account: string, token: string): boolean {
-  const r = sh("security", ["add-generic-password", "-U", "-a", account, "-s", SERVICE, "-w", token]);
+  // `security -i` reads the command from stdin, so the token never appears in
+  // the process argv (visible to `ps` for the duration of the spawn — Apple's
+  // own man page flags `-w <password>` as insecure). Inside the double-quoted
+  // string only backslash and double-quote are special; account names are
+  // already restricted to [A-Za-z0-9._-] by validAccountName.
+  if (/[\r\n]/.test(token)) return false; // would terminate the stdin command
+  const quoted = '"' + token.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+  const r = sh(
+    "security",
+    ["-i"],
+    `add-generic-password -U -a ${account} -s ${SERVICE} -w ${quoted}\n`,
+  );
   return !r.error && r.status === 0;
 }
 function macGet(account: string): string | null {

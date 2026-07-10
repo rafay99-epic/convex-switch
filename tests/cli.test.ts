@@ -235,6 +235,22 @@ describe("rename / rm", () => {
     // nested resolves up-tree to the parent link now
     expect(cvx(["which", NESTED]).out.trim()).toBe("office");
   });
+  test("Object.prototype member names hit the Unknown-account path, not the prototype", () => {
+    // accounts["toString"] on a parsed vault object must yield undefined —
+    // not the inherited function, which would sail past every `if (!acc)`
+    // guard (link then crashes; rm/rename report false success).
+    seedAccounts();
+    for (const name of ["toString", "constructor", "hasOwnProperty"]) {
+      const link = cvx(["link", name, PROJ]);
+      expect(link.code).toBe(1);
+      expect(link.err).toContain(`Unknown account ${name}`);
+      const rm = cvx(["rm", name]);
+      expect(rm.code).toBe(1);
+      expect(rm.err).toContain(`Unknown account ${name}`);
+    }
+    // the failed links must not have been written
+    expect(readFileSync(LINKS, "utf8")).not.toContain("toString");
+  });
 });
 
 describe("add — argument validation (no network on failure paths)", () => {

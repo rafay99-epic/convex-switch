@@ -897,10 +897,21 @@ function migrateStorage(accounts: Accounts, target: Backend) {
     tokens[name] = t;
   }
   // 2) write all to the new backend (side effects), building new records.
+  // If one write throws partway through, delete the keychain secrets the
+  // earlier iterations just created (only those — never a secret an existing
+  // record still depends on), so an aborted migration leaves no live token
+  // orphaned in the keychain.
   const next: Accounts = {};
-  for (const name of names) {
-    const rec = makeTokenRecord(target, name, tokens[name]); // may throw before we commit
-    next[name] = withTokenRecord(accounts[name], rec);
+  const freshSecrets: string[] = [];
+  try {
+    for (const name of names) {
+      const rec = makeTokenRecord(target, name, tokens[name]); // may throw before we commit
+      if (rec.keychain && !accounts[name].keychain) freshSecrets.push(name);
+      next[name] = withTokenRecord(accounts[name], rec);
+    }
+  } catch (e) {
+    for (const name of freshSecrets) deleteToken(name, { keychain: true });
+    throw e;
   }
   // 3) commit, then delete now-orphaned keychain secrets.
   writeAccounts(next);
@@ -1136,10 +1147,25 @@ export async function cmdDoctor(args: string[] = []) {
     const swapped = replaceHookBlock(body, hookFor(sh));
     if (!swapped || swapped.changed) staleHooks.push(sh);
   }
+  // PowerShell's profile has no fixed RC_FILES path — check it separately when
+  // it's this machine's shell, or an installed pwsh hook is invisible here.
+  let pwshStale = false;
+  if (detectShell() === "powershell") {
+    const profile = pwshProfilePath();
+    if (profile && existsSync(profile)) {
+      const body = readFileSync(profile, "utf8");
+      if (body.includes(HOOK_MARKER)) {
+        hooked = true;
+        const swapped = replaceHookBlock(body, hookFor("powershell"));
+        if (!swapped || swapped.changed) pwshStale = true;
+      }
+    }
+  }
+  const anyStale = staleHooks.length > 0 || pwshStale;
   console.log(
-    `  ${warn(hooked && !staleHooks.length)} shell hook        ${
+    `  ${warn(hooked && !anyStale)} shell hook        ${
       hooked
-        ? staleHooks.length
+        ? anyStale
           ? yellow("outdated — run `cvx hook --install` (or `cvx doctor --fix`)")
           : dim("installed")
         : yellow("not installed — run `cvx hook --install`")
@@ -1203,8 +1229,8 @@ export async function cmdDoctor(args: string[] = []) {
     if (!hooked) {
       const shell = detectShell();
       if (shell === "powershell") {
-        installPwsh(hookFor("powershell"));
-        fixed("installed the PowerShell cd-hook");
+        const r = installPwsh(hookFor("powershell"));
+        if (r === "added" || r === "updated") fixed("installed the PowerShell cd-hook");
       } else if (installHookInto(shell) === "added") {
         fixed(`installed the ${shell} cd-hook into ${shortPath(join(HOME, RC_FILES[shell]))}`);
       }
@@ -1217,6 +1243,8 @@ export async function cmdDoctor(args: string[] = []) {
             dim(`      → the ${sh} hook block in ${shortPath(join(HOME, RC_FILES[sh]))} is incomplete — reinstall it by hand (cvx hook)`),
           );
       }
+      if (pwshStale && installPwsh(hookFor("powershell")) === "updated")
+        fixed("updated the PowerShell hook");
     }
 
     // Dead links → prune every links.json path that no longer exists (one write).
@@ -1338,18 +1366,28 @@ function installHookInto(shell: Exclude<Shell, "powershell">): InstallResult {
   return "added";
 }
 
-function installPwsh(snippet: string) {
+/**
+ * The PowerShell profile the hook lives in. CVX_HOME is a complete sandbox —
+ * it must relocate this file too, never spawn the real pwsh to resolve (and
+ * later overwrite) the machine's actual $PROFILE from a test or sandbox run.
+ */
+function pwshProfilePath(): string | null {
+  if (process.env.CVX_HOME) return join(HOME, "powershell_profile.ps1");
   const ask2 = (exe: string) => {
     const r = spawnSync(exe, ["-NoProfile", "-Command", "$PROFILE.CurrentUserAllHosts"], {
       encoding: "utf8",
     });
     return r.status === 0 ? r.stdout.trim() : "";
   };
-  const profile = ask2("pwsh") || ask2("powershell");
+  return ask2("pwsh") || ask2("powershell") || null;
+}
+
+function installPwsh(snippet: string): InstallResult | "missing" {
+  const profile = pwshProfilePath();
   if (!profile) {
     console.log(yellow("Couldn't find PowerShell. Add this to your $PROFILE manually:") + "\n");
     process.stdout.write(snippet);
-    return;
+    return "missing";
   }
   const body = existsSync(profile) ? readFileSync(profile, "utf8") : "";
   if (body.includes(HOOK_MARKER)) {
@@ -1358,18 +1396,21 @@ function installPwsh(snippet: string) {
       writeFileSync(profile, swapped.body);
       console.log(`${green("✓")} Updated the hook in ${cyan(profile)}.${vexTag("happy")}`);
       console.log(dim("  Open a new PowerShell window to pick up the new version."));
+      return "updated";
     } else if (swapped) {
       console.log(yellow(`Hook already up to date in ${profile} — nothing to do.`));
+      return "unchanged";
     } else {
       console.log(
         yellow(`Found a ${HOOK_MARKER} marker in ${profile} but not a complete hook block.`) +
           `\n  Remove the old lines, then re-run ${bold("cvx hook --install")}.`,
       );
+      return "manual";
     }
-    return;
   }
   mkdirSync(dirname(profile), { recursive: true });
   appendFileSync(profile, "\n" + snippet);
   console.log(`${green("✓")} Added hook to ${cyan(profile)}.${vexTag("happy")}`);
   console.log(dim("  Open a new PowerShell window to activate it."));
+  return "added";
 }

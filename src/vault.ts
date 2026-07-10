@@ -15,7 +15,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { decrypt, deriveKey, encrypt, newSalt } from "./crypto";
@@ -42,7 +42,20 @@ function sessionKey(): Buffer | null {
 }
 
 function cacheSession(key: Buffer) {
-  writeFileSync(sessionFile(), key.toString("base64") + "\n", { mode: 0o600 });
+  // Atomic (temp + rename): the cd-hook reads this file concurrently, and a
+  // torn read would make sessionKey() return null — the vault would look
+  // locked mid-`vault unlock`. (Can't reuse store.ts's writer: store imports us.)
+  const file = sessionFile();
+  const tmp = `${file}.${process.pid}.tmp`;
+  writeFileSync(tmp, key.toString("base64") + "\n", { mode: 0o600 });
+  try {
+    renameSync(tmp, file);
+  } catch (e) {
+    try {
+      unlinkSync(tmp);
+    } catch {}
+    throw e;
+  }
 }
 
 /** First-time setup: persist salt + canary, cache the session key. */

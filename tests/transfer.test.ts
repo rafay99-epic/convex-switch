@@ -63,6 +63,19 @@ describe("packVault / unpackVault", () => {
     expect(transfer.unpackVault(process.env.CVX_PASSPHRASE!, "{\"kind\":\"other\"}")).toBeNull();
     expect(transfer.unpackVault(process.env.CVX_PASSPHRASE!, "not json")).toBeNull();
   });
+
+  test("a decryptable but malformed payload → null (never tokenless accounts)", async () => {
+    const crypto = await import("../src/crypto");
+    const pp = process.env.CVX_PASSPHRASE!;
+    const seal = (payload: unknown) => {
+      const salt = crypto.newSalt();
+      const data = crypto.encrypt(crypto.deriveKey(pp, salt), JSON.stringify(payload));
+      return JSON.stringify({ v: 1, kind: "cvx-export", salt: salt.toString("base64"), data });
+    };
+    expect(transfer.unpackVault(pp, seal({ accounts: "nope", links: {} }))).toBeNull();
+    expect(transfer.unpackVault(pp, seal({ accounts: { a: { teams: [] } }, links: {} }))).toBeNull();
+    expect(transfer.unpackVault(pp, seal({ accounts: {}, links: { "/p": 42 } }))).toBeNull();
+  });
 });
 
 describe("cmdExport", () => {

@@ -51,6 +51,22 @@ describe("replaceHookBlock", () => {
     expect(result!.changed).toBe(false);
   });
 
+  test("swapping an outdated block in a CRLF body keeps CRLF endings throughout", () => {
+    const oldBlock =
+      "# --- convex-switch ---------------------------------------------------------\n" +
+      "_convex_switch_hook() { command cvx activate -q 2>/dev/null }\n" +
+      "# --- end convex-switch -----------------------------------------------------\n";
+    const body = ("before\n" + oldBlock + "after\n").replaceAll("\n", "\r\n");
+
+    const result = hooks.replaceHookBlock(body, SNIPPET);
+
+    expect(result).not.toBeNull();
+    expect(result!.changed).toBe(true);
+    expect(result!.body).toContain("_convex_switch_precmd");
+    // No mixed endings: stripping every CRLF must leave no bare LF behind.
+    expect(result!.body.replaceAll("\r\n", "")).not.toContain("\n");
+  });
+
   test("body without markers returns null", () => {
     const body = "just some rc content\nalias ll='ls -la'\n";
 

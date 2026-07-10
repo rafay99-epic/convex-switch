@@ -107,7 +107,15 @@ function readVaultJSON<T>(file: string, fallback: T): T {
   const raw = readFileSync(file, "utf8");
   if (raw.trim() === "") return fallback;
   try {
-    return JSON.parse(raw) as T;
+    const parsed = JSON.parse(raw);
+    // Null prototype: account names (and other keys) come from user input, so
+    // a lookup like accounts["toString"] must yield undefined — not an
+    // inherited Object.prototype member that defeats every `if (!acc)` guard.
+    return (
+      parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? Object.assign(Object.create(null), parsed)
+        : parsed
+    ) as T;
   } catch {
     throw new Error(
       `${file} is corrupted (invalid JSON). Fix or delete it, then re-run.`,
@@ -120,10 +128,19 @@ function readVaultJSON<T>(file: string, fallback: T): T {
  * truncated file behind — that matters because readVaultJSON treats a torn
  * vault file as fatal, and a torn ~/.convex/config.json would log the user out.
  */
-function writeFileAtomic(file: string, contents: string) {
+export function writeFileAtomic(file: string, contents: string) {
   const tmp = `${file}.${process.pid}.tmp`;
   writeFileSync(tmp, contents, { mode: 0o600 });
-  renameSync(tmp, file);
+  try {
+    renameSync(tmp, file);
+  } catch (e) {
+    // The temp file may hold a live token — never leave it orphaned when the
+    // rename fails (e.g. Windows EPERM while another process holds the target).
+    try {
+      unlinkSync(tmp);
+    } catch {}
+    throw e;
+  }
   try {
     chmodSync(file, 0o600);
   } catch {}
@@ -187,7 +204,12 @@ function snapshotOnce() {
       config: raw(CONFIG_FILE),
       active: raw(ACTIVE_FILE),
     };
-    writeFileAtomic(join(BACKUPS, `${Date.now()}.json`), JSON.stringify(snap, null, 2) + "\n");
+    // pid suffix: two cvx processes snapshotting in the same millisecond must
+    // not silently overwrite each other's backup (rename replaces silently).
+    writeFileAtomic(
+      join(BACKUPS, `${Date.now()}-${process.pid}.json`),
+      JSON.stringify(snap, null, 2) + "\n",
+    );
     const files = readdirSync(BACKUPS)
       .filter((f) => f.endsWith(".json"))
       .sort();

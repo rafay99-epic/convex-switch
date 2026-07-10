@@ -172,7 +172,13 @@ export function replaceHookBlock(
   // a Windows editor) with current content must not read as outdated forever.
   const current = lines.slice(start, end + 1).map((l) => l.replace(/\r$/, "")).join("\n") + "\n";
   if (current === snippet) return { body, changed: false };
-  const next = [...lines.slice(0, start), snippet.trimEnd(), ...lines.slice(end + 1)];
+  // Match the file's line endings: swapping an LF snippet into a CRLF file
+  // (a Windows $PROFILE) must not leave it with mixed endings.
+  const crlf = lines[start].endsWith("\r");
+  const block = crlf
+    ? snippet.trimEnd().split("\n").map((l) => l + "\r").join("\n")
+    : snippet.trimEnd();
+  const next = [...lines.slice(0, start), block, ...lines.slice(end + 1)];
   return { body: next.join("\n"), changed: true };
 }
 

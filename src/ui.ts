@@ -33,7 +33,9 @@ export function die(msg: string): never {
 export async function askHidden(question: string): Promise<string> {
   if (!process.stdin.isTTY)
     die("This prompt needs a terminal. In scripts, set CVX_PASSPHRASE instead.");
-  process.stdout.write(question);
+  // stderr, not stdout: the prompt must stay visible when stdout is redirected,
+  // and must never leak into piped/captured command output.
+  process.stderr.write(question);
   const stdin = process.stdin;
   return await new Promise((resolve) => {
     let buf = "";
@@ -41,13 +43,13 @@ export async function askHidden(question: string): Promise<string> {
       for (const ch of d.toString("utf8")) {
         if (ch === "\r" || ch === "\n") {
           cleanup();
-          process.stdout.write("\n");
+          process.stderr.write("\n");
           return resolve(buf);
         }
         if (ch === "\x03") {
           // Ctrl-C
           cleanup();
-          process.stdout.write("\n");
+          process.stderr.write("\n");
           process.exit(130);
         }
         if (ch === "\x7f" || ch === "\b") buf = buf.slice(0, -1);
