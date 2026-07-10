@@ -1,0 +1,49 @@
+src/vault.ts
+  s_3e1f65d7cf2a46::t_3186f0c3953c73 18
+  s_3e1f65d7cf2a46::t_7fb0bb73c2d093 45-58
+tests/transfer.test.ts
+  s_3e1f65d7cf2a46::t_e331dc0945b572 66-78
+src/commands.ts
+  s_3e1f65d7cf2a46::t_75f69b1971490f 1232-1233,1246-1247
+  s_3e1f65d7cf2a46::t_ceeebc8620dab0 900-903,905-914
+  s_3e1f65d7cf2a46::t_e39335be5281b8 1369-1375,1382-1386,1390,1399,1402,1408,1415
+  s_3e1f65d7cf2a46::t_b7c151bb7dbf4a 1150-1164,1166,1168
+src/store.ts
+  s_3e1f65d7cf2a46::t_62ef79d0bca12b 207-212
+  s_3e1f65d7cf2a46::t_4b7f975ee84ddf 110-118
+  s_3e1f65d7cf2a46::t_7fd57bf8dbe2fd 131,134-143
+src/ui.ts
+  s_3e1f65d7cf2a46::t_e888729784848e 36-38
+  s_3e1f65d7cf2a46::t_13e3c423a3affc 46,52
+tests/cli.test.ts
+  s_3e1f65d7cf2a46::t_84964537c64546 238-253
+tests/hooks.test.ts
+  s_3e1f65d7cf2a46::t_709a052959f2f4 54-69
+src/keychain.ts
+  s_3e1f65d7cf2a46::t_d903ad9d58dd0c 53-64
+src/transfer.ts
+  s_3e1f65d7cf2a46::t_638c980fc72ed3 154-156
+  s_3e1f65d7cf2a46::t_5fe75da79e0eec 69-79
+  s_3e1f65d7cf2a46::t_40ca3e63232ba8 9,14
+  s_3e1f65d7cf2a46::t_df73bf81526afe 107
+src/spinner.ts
+  s_3e1f65d7cf2a46::t_1b22dd2e316309 30-35,39
+src/hooks.ts
+  s_3e1f65d7cf2a46::t_582700cfa9693a 175-181
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5221d696c58a64156526eb6431fb32eca8ccc38d",
+  "prompts": {},
+  "sessions": {
+    "s_3e1f65d7cf2a46": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5368aae9-3d9f-4eaf-8736-866768f8f856",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
