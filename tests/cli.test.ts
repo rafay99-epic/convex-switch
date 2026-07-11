@@ -751,6 +751,8 @@ describe("activate --env (per-session token export)", () => {
     expect(JSON.parse(readFileSync(CONVEX_CFG, "utf8")).accessToken).toBe("tok-pers-BBB");
   });
   test("status and prompt report the session's own account over the global one", () => {
+    // link here, not in the previous test — that one is skipped on Windows
+    cvx(["link", "personal", NESTED]);
     cvx(["activate", NESTED]); // global config now holds `personal`
     const env = { CVX_ACCOUNT: "work", CONVEX_OVERRIDE_ACCESS_TOKEN: "tok-work-AAA" };
     const s = JSON.parse(cvx(["status", "--json"], { cwd: PROJ, env }).out);
