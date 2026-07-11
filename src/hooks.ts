@@ -6,6 +6,14 @@
  * `cvx hook` prints the right one, `--install` wires it into the shell's
  * startup file (replacing an outdated block in place).
  *
+ * Per-session isolation: the hooks eval `cvx activate --env`, which prints an
+ * export of CONVEX_OVERRIDE_ACCESS_TOKEN (honored by the Convex CLI above the
+ * global config) + CVX_ACCOUNT for the linked account — so two terminals on
+ * different accounts run in parallel without fighting over the one global
+ * ~/.convex/config.json. The global swap still happens as a fallback for
+ * anything not running under a hooked shell (IDEs, older Convex CLIs).
+ * In --env mode stdout is eval'd, so human messages arrive on stderr.
+ *
  * Hot-path rule: the per-prompt check must be spawn-free. Each shell keeps a
  * per-shell stamp file and uses its builtin `-nt` (newer-than) test against
  * the global config — `cvx activate` is only spawned when the config actually
@@ -33,13 +41,16 @@ export const RC_FILES: Record<Exclude<Shell, "powershell">, string> = {
 
 // zsh: chpwd on directory change, plus a precmd that re-syncs only when the
 // global config file is newer than this shell's stamp (builtin -nt, no spawn).
+// The eval exports this session's token (stdout is eval-safe; messages are on
+// stderr) so parallel terminals hold different accounts at the same time.
 const HOOK_ZSH = `
 # --- convex-switch ---------------------------------------------------------
 # Auto-activate the linked Convex account when you cd into a project, and
 # re-sync at the prompt if another terminal switched the global config.
 __CVX_STAMP="\${TMPDIR:-/tmp}/.cvx-stamp-\${USER:-u}-$$"
 _convex_switch_hook() {
-  command cvx activate -q 2>/dev/null
+  (( $+commands[cvx] )) || return 0
+  eval "$(command cvx activate -q --env)"
   : >| "$__CVX_STAMP"
 }
 _convex_switch_precmd() {
@@ -60,7 +71,8 @@ const HOOK_BASH = `
 # re-sync at the prompt if another terminal switched the global config.
 __CVX_STAMP="\${TMPDIR:-/tmp}/.cvx-stamp-\${USER:-u}-$$"
 __convex_switch_sync() {
-  command cvx activate -q 2>/dev/null
+  command -v cvx >/dev/null 2>&1 || return 0
+  eval "$(command cvx activate -q --env)"
   : >| "$__CVX_STAMP"
 }
 __convex_switch_hook() {
@@ -94,7 +106,8 @@ if (-not $global:__cvx_hooked) {
     $m = [System.IO.File]::GetLastWriteTimeUtc($global:__cvx_cfg)
     if ($PWD.Path -ne $global:__cvx_last -or $m -gt $global:__cvx_stamp) {
       $global:__cvx_last = $PWD.Path
-      cvx activate -q 2>$null | Out-Null
+      $e = cvx activate -q --env --shell powershell 2>$null
+      if ($e) { Invoke-Expression ($e -join "; ") }
       $global:__cvx_stamp = [System.IO.File]::GetLastWriteTimeUtc($global:__cvx_cfg)
     }
     if ($global:__cvx_orig_prompt) { & $global:__cvx_orig_prompt } else { "PS $($PWD.Path)> " }
@@ -112,7 +125,8 @@ const HOOK_FISH = `
 set -q CVX_HOME; and set -g __cvx_cfg "$CVX_HOME/.convex/config.json"; or set -g __cvx_cfg "$HOME/.convex/config.json"
 set -q TMPDIR; and set -g __cvx_stamp "$TMPDIR/.cvx-stamp-$USER-$fish_pid"; or set -g __cvx_stamp "/tmp/.cvx-stamp-$USER-$fish_pid"
 function __convex_switch_sync
-  command cvx activate -q 2>/dev/null
+  command -q cvx; or return
+  eval (command cvx activate -q --env --shell fish | string collect)
   true > $__cvx_stamp
 end
 function __convex_switch_hook --on-variable PWD
@@ -130,7 +144,9 @@ __convex_switch_sync
 // Nushell: register a PWD env-change hook. Best-effort — hook syntax varies by
 // Nushell version; tested against recent releases. No prompt-time resync here:
 // env mutations inside nu closure hooks don't persist between prompts, so the
-// stamp-guard pattern the other shells use would spawn cvx on EVERY prompt.
+// stamp-guard pattern the other shells use would spawn cvx on EVERY prompt —
+// and for the same reason no per-session --env export either (nu sessions get
+// the global-config swap only).
 const HOOK_NU = `
 # --- convex-switch ---------------------------------------------------------
 # Auto-activate the linked Convex account when you change directory.
@@ -180,6 +196,38 @@ export function replaceHookBlock(
     : snippet.trimEnd();
   const next = [...lines.slice(0, start), block, ...lines.slice(end + 1)];
   return { body: next.join("\n"), changed: true };
+}
+
+// --- per-session env export (`cvx activate --env`) ---------------------------
+
+const ENV_TOKEN = "CONVEX_OVERRIDE_ACCESS_TOKEN"; // read by the Convex CLI, wins over ~/.convex/config.json
+const ENV_NAME = "CVX_ACCOUNT"; // the account name, for prompts/scripts
+
+/**
+ * One eval-able line that binds (or clears) this shell session's Convex
+ * account. `acct` present → export the token + name; absent → unset both, so
+ * the session falls back to the global config. Always a single line, and the
+ * only thing `activate --env` may print to stdout.
+ */
+export function envLine(shell: Shell, acct?: { name: string; token: string }): string {
+  switch (shell) {
+    case "fish": {
+      if (!acct) return `set -e ${ENV_NAME}; set -e ${ENV_TOKEN}`;
+      const q = (s: string) => `'${s.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
+      return `set -gx ${ENV_NAME} ${q(acct.name)}; set -gx ${ENV_TOKEN} ${q(acct.token)}`;
+    }
+    case "powershell": {
+      if (!acct) return `Remove-Item Env:${ENV_NAME},Env:${ENV_TOKEN} -ErrorAction SilentlyContinue`;
+      const q = (s: string) => `'${s.replace(/'/g, "''")}'`;
+      return `$env:${ENV_NAME} = ${q(acct.name)}; $env:${ENV_TOKEN} = ${q(acct.token)}`;
+    }
+    default: {
+      // posix (zsh/bash). nu never reaches here — its hook doesn't use --env.
+      if (!acct) return `unset ${ENV_NAME} ${ENV_TOKEN}`;
+      const q = (s: string) => `'${s.replace(/'/g, "'\\''")}'`;
+      return `export ${ENV_NAME}=${q(acct.name)} ${ENV_TOKEN}=${q(acct.token)}`;
+    }
+  }
 }
 
 /** Best-effort shell detection when the user doesn't pass --shell. */

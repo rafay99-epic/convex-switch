@@ -50,7 +50,15 @@ function cvx(
     cwd: opts.cwd ?? ROOT,
     encoding: "utf8",
     input: opts.stdin ?? "", // piped stdin → never a TTY
-    env: { ...process.env, CVX_HOME: HOME, NO_COLOR: "1", ...opts.env },
+    env: {
+      ...process.env,
+      CVX_HOME: HOME,
+      NO_COLOR: "1",
+      // never inherit a session binding from the developer's own hooked shell
+      CVX_ACCOUNT: "",
+      CONVEX_OVERRIDE_ACCESS_TOKEN: "",
+      ...opts.env,
+    },
   });
   return { code: r.status, out: r.stdout ?? "", err: r.stderr ?? "", all: (r.stdout ?? "") + (r.stderr ?? "") };
 }
@@ -682,5 +690,76 @@ describe("doctor --fix", () => {
     expect(r.code).toBe(0);
     expect(r.out).toContain("cleared stale active marker");
     expect(readFileSync(ACTIVE, "utf8").split("\n")[0]).toBe("");
+  });
+});
+
+describe("activate --env (per-session token export)", () => {
+  test("linked dir: eval-able export on stdout, human message on stderr", () => {
+    seedAccounts();
+    rmSync(CONVEX_CFG, { force: true });
+    cvx(["link", "work", PROJ]);
+    const r = cvx(["activate", "-q", "--env", PROJ]);
+    expect(r.code).toBe(0);
+    expect(r.out.trim()).toBe(
+      "export CVX_ACCOUNT='work' CONVEX_OVERRIDE_ACCESS_TOKEN='tok-work-AAA'",
+    );
+    expect(r.err).toContain("convex account → work");
+    // the global swap still happens (fallback for non-hooked processes)
+    expect(JSON.parse(readFileSync(CONVEX_CFG, "utf8")).accessToken).toBe("tok-work-AAA");
+  });
+  test("already-active path still emits the export", () => {
+    const r = cvx(["activate", "-q", "--env", PROJ]);
+    expect(r.out.trim()).toBe(
+      "export CVX_ACCOUNT='work' CONVEX_OVERRIDE_ACCESS_TOKEN='tok-work-AAA'",
+    );
+  });
+  test("unlinked dir: unsets both vars so the session falls back to the global config", () => {
+    const r = cvx(["activate", "-q", "--env", tmpdir()]);
+    expect(r.code).toBe(0);
+    expect(r.out.trim()).toBe("unset CVX_ACCOUNT CONVEX_OVERRIDE_ACCESS_TOKEN");
+  });
+  test("--shell fish emits fish syntax", () => {
+    const r = cvx(["activate", "-q", "--env", "--shell", "fish", PROJ]);
+    expect(r.out.trim()).toBe(
+      "set -gx CVX_ACCOUNT 'work'; set -gx CONVEX_OVERRIDE_ACCESS_TOKEN 'tok-work-AAA'",
+    );
+  });
+  test.skipIf(WIN)("two parallel shell sessions keep different accounts live", () => {
+    cvx(["link", "personal", NESTED]);
+    // Session A binds `work` via eval; session B (another terminal) then swaps
+    // the global config to `personal`. A's exported token must not move.
+    const script = [
+      `eval "$("$BUN" "$BIN" activate -q --env "$PROJ")"`,
+      `"$BUN" "$BIN" activate -q "$NESTED" >/dev/null 2>&1`,
+      `echo "A=$CVX_ACCOUNT T=$CONVEX_OVERRIDE_ACCESS_TOKEN"`,
+    ].join("\n");
+    const r = spawnSync("bash", ["-c", script], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        CVX_HOME: HOME,
+        NO_COLOR: "1",
+        BUN: process.execPath,
+        BIN,
+        PROJ,
+        NESTED,
+      },
+    });
+    expect(r.status).toBe(0);
+    expect(r.stdout.trim()).toBe("A=work T=tok-work-AAA");
+    // ...while the global config now belongs to session B's account.
+    expect(JSON.parse(readFileSync(CONVEX_CFG, "utf8")).accessToken).toBe("tok-pers-BBB");
+  });
+  test("status and prompt report the session's own account over the global one", () => {
+    cvx(["activate", NESTED]); // global config now holds `personal`
+    const env = { CVX_ACCOUNT: "work", CONVEX_OVERRIDE_ACCESS_TOKEN: "tok-work-AAA" };
+    const s = JSON.parse(cvx(["status", "--json"], { cwd: PROJ, env }).out);
+    expect(s.active).toBe("work");
+    expect(s.session).toBe("work");
+    expect(s.global).toBe("personal");
+    expect(cvx(["prompt"], { env }).out).toBe("work");
+    // an override naming an unknown account is ignored, not trusted
+    const ghost = { CVX_ACCOUNT: "ghost", CONVEX_OVERRIDE_ACCESS_TOKEN: "tok-x" };
+    expect(cvx(["prompt"], { env: ghost }).out).toBe("personal");
   });
 });

@@ -5,7 +5,7 @@ import { join, dirname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 
-import { type Shell, hookFor, detectShell, SHELLS, HOOK_MARKER, RC_FILES, replaceHookBlock } from "./hooks";
+import { type Shell, hookFor, detectShell, SHELLS, HOOK_MARKER, RC_FILES, replaceHookBlock, envLine } from "./hooks";
 import { hasCommand, isWindows, openUrl, runInherit } from "./system";
 import { type Backend, backendLabel, platformKeychain } from "./keychain";
 import { completionFor } from "./completions";
@@ -77,6 +77,17 @@ function requireAccount(accounts: Accounts, name: string): Account {
   return acc;
 }
 
+/**
+ * Account bound to THIS shell session by the hook's `activate --env` export.
+ * CONVEX_OVERRIDE_ACCESS_TOKEN beats the global config inside the Convex CLI,
+ * so when it's set, the session var — not the global marker — is the truth.
+ */
+function sessionAccount(accounts: Accounts): string | null {
+  const name = process.env.CVX_ACCOUNT;
+  if (!process.env.CONVEX_OVERRIDE_ACCESS_TOKEN || !name) return null;
+  return Object.hasOwn(accounts, name) ? name : null;
+}
+
 function requireValidName(name: string) {
   if (!validAccountName(name))
     die(
@@ -106,10 +117,10 @@ function mismatchedTeam(dir: string, acc: Account): string | null {
   return team;
 }
 
-function warnTeamMismatch(dir: string, name: string, acc: Account) {
+function warnTeamMismatch(dir: string, name: string, acc: Account, say = console.log) {
   const team = mismatchedTeam(dir, acc);
   if (!team) return;
-  console.log(
+  say(
     `${yellow("▲")} team mismatch: this project's deployment belongs to ${bold(team)}, ` +
       `but ${bold(name)} only has ${acc.teams.map((t) => t.slug).join(", ")}.\n` +
       dim("  Linked to the wrong account? Fix with: cvx link <account>"),
@@ -365,33 +376,52 @@ export async function cmdRm(args: string[]) {
  * the prompt. For inline (file) tokens it compares tokens directly; for
  * keychain/DPAPI tokens (a slow lookup) it trusts the active-marker so the hot
  * path stays fast.
+ *
+ * --env: additionally print ONE eval-able line to stdout binding this shell
+ * session's account via CONVEX_OVERRIDE_ACCESS_TOKEN (+ CVX_ACCOUNT), which
+ * the Convex CLI reads above the global config — that's what lets parallel
+ * terminals hold different accounts. In this mode stdout belongs to the shell
+ * hook's eval, so every human message goes to stderr instead; when no token
+ * is available the line unsets both vars and the session falls back to the
+ * global config (which is still swapped as before).
  */
 export function cmdActivate(args: string[]) {
   const flags = parseFlags(args);
   const quiet = flags.q || flags.quiet;
+  const envMode = !!flags.env;
+  const shell: Shell = SHELLS.includes(flags.shell as Shell) ? (flags.shell as Shell) : "zsh";
+  const say = envMode ? console.error : console.log;
+  // Exactly one env line per invocation, whichever exit path runs.
+  let envDone = false;
+  const emit = (acct?: { name: string; token: string }) => {
+    if (!envMode || envDone) return;
+    envDone = true;
+    console.log(envLine(shell, acct));
+  };
   try {
     const link = resolveLink(flags._[0] ?? process.cwd());
     if (!link) {
-      if (!quiet) console.log(dim("No account linked to this directory."));
-      return;
+      if (!quiet) say(dim("No account linked to this directory."));
+      return emit();
     }
     const accounts = readAccounts();
     const acc = accounts[link.account];
     if (!acc) {
-      if (!quiet) console.log(yellow(`Linked to unknown account "${link.account}".`));
-      return;
+      if (!quiet) say(yellow(`Linked to unknown account "${link.account}".`));
+      return emit();
     }
-    warnTeamMismatch(flags._[0] ?? process.cwd(), link.account, acc);
+    warnTeamMismatch(flags._[0] ?? process.cwd(), link.account, acc, say);
     const expensive = !!acc.keychain || !!acc.enc; // reading the token spawns a process
     if (expensive) {
       // Trust the marker instead of a slow secret lookup — but only when its
       // token fingerprint still matches the global config, so an external
       // `npx convex login` can't leave the wrong account silently "active".
+      // The matching global token IS this account's token — export that.
       const cur = currentConvexToken();
       if (cur != null && activeMarkerMatches(link.account, cur)) {
         if (!quiet)
-          console.log(`${green("●")} ${accountColor(link.account)} ${teamLabel(acc)} ${dim("(already active)")}`);
-        return;
+          say(`${green("●")} ${accountColor(link.account)} ${teamLabel(acc)} ${dim("(already active)")}`);
+        return emit({ name: link.account, token: cur });
       }
     }
     const token = tokenOf(link.account, acc);
@@ -399,27 +429,29 @@ export function cmdActivate(args: string[]) {
       // A locked vault must be visible even from the quiet cd-hook, or the
       // account silently never switches.
       if (acc.pw && vaultLocked()) {
-        console.log(
+        say(
           `${yellow("⚿")} vault locked — run ${bold("cvx vault unlock")} to switch to ${bold(link.account)}`,
         );
-        return;
+        return emit();
       }
       if (!quiet) console.error(red("cvx: ") + `couldn't read the token for ${link.account}`);
-      return;
+      return emit();
     }
     if (currentConvexToken() === token) {
       writeActive(link.account, token);
       if (!quiet)
-        console.log(`${green("●")} ${accountColor(link.account)} ${teamLabel(acc)} ${dim("(already active)")}`);
-      return;
+        say(`${green("●")} ${accountColor(link.account)} ${teamLabel(acc)} ${dim("(already active)")}`);
+      return emit({ name: link.account, token });
     }
     setConvexToken(token);
     writeActive(link.account, token);
-    console.log(
+    say(
       `${cyan("⇄")} convex account → ${accountColor(link.account)} ${teamLabel(acc)}${vexTag("happy", link.account)}`,
     );
+    emit({ name: link.account, token });
   } catch (e) {
     if (!quiet) console.error(red("cvx: ") + (e as Error).message);
+    emit(); // never leave the session bound to a stale token
   }
 }
 
@@ -521,7 +553,11 @@ async function pickNumbered(names: string[]): Promise<string | null> {
 export function cmdStatus(args: string[] = []) {
   const flags = parseFlags(args);
   const accounts = readAccounts();
-  const active = activeAccountName(accounts);
+  const global = activeAccountName(accounts);
+  // A hooked shell exports the account per session (activate --env) — that's
+  // what the Convex CLI actually uses here, so it wins over the global config.
+  const session = sessionAccount(accounts);
+  const active = session ?? global;
   const link = resolveLink(process.cwd());
   const loggedIn = currentConvexToken() != null;
 
@@ -531,6 +567,8 @@ export function cmdStatus(args: string[] = []) {
         {
           active,
           activeTeams: active ? accounts[active]?.teams.map((t) => t.slug) : [],
+          session,
+          global,
           linked: link?.account ?? null,
           linkPath: link?.path ?? null,
           dir: canon(process.cwd()),
@@ -554,8 +592,13 @@ export function cmdStatus(args: string[] = []) {
         : "happy";
   const face = process.stdout.isTTY ? `   ${vex(mood, active)}` : "";
   console.log(bold("Active convex account:") + face);
-  if (active) console.log(`  ${green("●")} ${accountColor(active)} ${teamLabel(accounts[active])}`);
-  else if (loggedIn)
+  if (active) {
+    const via =
+      session && session !== global
+        ? dim(`  (this session · global config: ${global ?? "none"})`)
+        : "";
+    console.log(`  ${green("●")} ${accountColor(active)} ${teamLabel(accounts[active])}${via}`);
+  } else if (loggedIn)
     console.log(`  ${yellow("●")} unknown login ${dim("(run `cvx add <name>` to name it)")}`);
   else console.log(`  ${dim("(not logged in)")}`);
 
@@ -633,8 +676,11 @@ style = "bold cyan"
     return;
   }
   try {
-    const name = readActive();
-    if (name && readAccounts()[name]) {
+    const accounts = readAccounts();
+    // The session's own export (activate --env) is what convex actually uses
+    // in this terminal — show it over the shared global marker.
+    const name = sessionAccount(accounts) ?? readActive();
+    if (name && accounts[name]) {
       // --color embeds raw ANSI in the account's stable color — an explicit
       // opt-in exception to output hygiene, for hand-rolled PS1/PROMPT use.
       if (flags.color) process.stdout.write(`\x1b[1;38;5;${accountColorCode(name)}m${name}\x1b[0m`);
