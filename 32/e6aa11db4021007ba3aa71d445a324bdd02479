@@ -1,0 +1,19 @@
+tests/cli.test.ts
+  s_d5e9e48ebc83a2::t_6685463a7b4425 754-755
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "32e6aa11db4021007ba3aa71d445a324bdd02479",
+  "prompts": {},
+  "sessions": {
+    "s_d5e9e48ebc83a2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2f73b1ce-b40d-4304-8f4f-365f4dbcc806",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
