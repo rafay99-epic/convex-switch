@@ -93,9 +93,15 @@ Prebuilt binaries: **macOS** (arm64/x64), **Linux** (arm64/x64), **Windows**
 --install` detects your shell (PowerShell on Windows) and wires the hook into
 the right startup file (`~/.zshrc`, `~/.bashrc`, or your PowerShell `$PROFILE`).
 Force one with `cvx hook --install --shell powershell`. Working in several
-terminals at once? Every hook also re-syncs at the prompt when another
-session has swapped the global config, so a terminal left sitting in a
-project reclaims its own account the moment you're back typing in it.
+terminals at once? The hook binds the account **per shell session**: it
+exports `CONVEX_OVERRIDE_ACCESS_TOKEN` (which the Convex CLI reads above the
+global config), so two terminals in different projects run as different
+accounts *at the same time* — nobody steals anybody's login. The global
+config is still swapped as a fallback for tools that don't run under a
+hooked shell, and every hook re-syncs at the prompt when another session
+swapped it. Note this puts the linked account's token in the session's
+environment (visible to processes you start from that shell), same trust
+level as the default plaintext vault.
 
 **From source** (Bun):
 
@@ -155,13 +161,15 @@ cd ~/Code/project-b     # ⇄ convex account → work
 bun run dev             # runs as work — both live simultaneously
 ```
 
-Working across several terminals on different accounts at once, and one of
-them sat idle while another swapped the global config? You don't need to
-`cd` out and back in — the prompt-time resync notices and reclaims the right
-account the moment you're back typing in that session. For a process that
-needs to keep running under its own account while another terminal is
-actively switching things, skip the global config entirely with
-`cvx run <account> -- <cmd>` (per-command token, no swap).
+Both terminals really are live simultaneously: each hooked session exports
+its own `CONVEX_OVERRIDE_ACCESS_TOKEN`, which the Convex CLI prefers over the
+global config — so `bun run dev` in project-a keeps running as `personal`
+while project-b's terminal works as `work`, no matter who touched the global
+config last. In an unlinked directory the session variable is cleared and
+the global config (plus the prompt-time resync) takes over, exactly as
+before. For a one-off command under a specific account there's also
+`cvx run <account> -- <cmd>` (per-command token, no session or global
+change).
 
 ## Commands
 
@@ -179,7 +187,7 @@ actively switching things, skip the global config entirely with
 | `cvx use [account]` | Activate by name from anywhere — or this dir's account / an interactive pick |
 | `cvx run <account> -- <cmd>` | Run one command as `<account>` without changing the global login |
 | `cvx open` | Open the Convex dashboard for this project's deployment |
-| `cvx activate [-q]` | Activate this dir's account (the hook calls this) |
+| `cvx activate [-q] [--env]` | Activate this dir's account (the hook calls this; `--env` prints the session export the hook evals) |
 | `cvx status [--json]` | Show the active account and this dir's link |
 | `cvx accounts` | List stored accounts (with when each token was last verified) |
 | `cvx ls` | List linked projects |
@@ -315,6 +323,7 @@ release still builds and publishes, only the formula bump is skipped.
 - To rotate/refresh an account, `npx convex login` into it again then
   `cvx add <name> --force`.
 - Unsupported shells: run `cvx hook` and adapt the snippet to your shell's
-  directory-change hook, plus a prompt hook that re-runs `cvx activate` when
-  the global config file is newer than a per-shell stamp — that's what
-  catches another terminal switching accounts out from under you.
+  directory-change hook — eval the output of `cvx activate -q --env` so the
+  session gets its own `CONVEX_OVERRIDE_ACCESS_TOKEN` export — plus a prompt
+  hook that re-runs it when the global config file is newer than a per-shell
+  stamp.

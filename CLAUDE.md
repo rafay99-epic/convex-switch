@@ -77,7 +77,9 @@ authored by the repo owner, full stop.
   her on a command's output. Never concatenate `vex(...)` into output without
   a TTY gate.
 - `which`, `prompt`, `accounts --names`, and `status --json` are scripting
-  surfaces — no decoration, ever.
+  surfaces — no decoration, ever. In `activate --env` mode stdout is eval'd
+  by the shell hook: it must carry exactly one `envLine()` and nothing else
+  (human messages go to stderr there).
 - Pad-then-colorize (`accountColor(name, name.padEnd(14))`) — colorizing before
   padEnd breaks column alignment because ANSI codes count as characters.
 - No spinners or new work on the cd-hook hot path (`activate`, `prompt`).
@@ -95,6 +97,11 @@ authored by the repo owner, full stop.
   the fingerprint matches the current global token.
 - `cvx activate` runs on every `cd` via shell hooks — treat it as a hot path
   (no network, no extra process spawns, must never throw).
+- Per-session isolation: the hooks eval `activate --env`, which exports
+  `CONVEX_OVERRIDE_ACCESS_TOKEN` (+ `CVX_ACCOUNT`) — the Convex CLI reads that
+  env var above the global config, so parallel terminals hold different
+  accounts. The global-config swap stays as the fallback for non-hooked
+  processes; `status`/`prompt` prefer the session vars when set.
 - The default file vault stores tokens in PLAINTEXT (mode 600). Never describe
   it as encrypted; the opt-in encrypted options are the OS keychain
   (`cvx keychain enable`) and the passphrase vault (`cvx vault encrypt`, see

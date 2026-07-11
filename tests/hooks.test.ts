@@ -82,3 +82,40 @@ describe("replaceHookBlock", () => {
     expect(hooks.replaceHookBlock(body, SNIPPET)).toBeNull();
   });
 });
+
+describe("envLine", () => {
+  const acct = { name: "work", token: "tok-AAA" };
+
+  test("posix export and unset", () => {
+    expect(hooks.envLine("zsh", acct)).toBe(
+      "export CVX_ACCOUNT='work' CONVEX_OVERRIDE_ACCESS_TOKEN='tok-AAA'",
+    );
+    expect(hooks.envLine("bash")).toBe("unset CVX_ACCOUNT CONVEX_OVERRIDE_ACCESS_TOKEN");
+  });
+
+  test("posix quoting survives single quotes in the value", () => {
+    const line = hooks.envLine("zsh", { name: "a", token: "it's" });
+    expect(line).toContain("CONVEX_OVERRIDE_ACCESS_TOKEN='it'\\''s'");
+  });
+
+  test("fish set/erase", () => {
+    expect(hooks.envLine("fish", acct)).toBe(
+      "set -gx CVX_ACCOUNT 'work'; set -gx CONVEX_OVERRIDE_ACCESS_TOKEN 'tok-AAA'",
+    );
+    expect(hooks.envLine("fish")).toBe("set -e CVX_ACCOUNT; set -e CONVEX_OVERRIDE_ACCESS_TOKEN");
+  });
+
+  test("powershell set/remove, quotes doubled", () => {
+    expect(hooks.envLine("powershell", { name: "a", token: "it's" })).toBe(
+      "$env:CVX_ACCOUNT = 'a'; $env:CONVEX_OVERRIDE_ACCESS_TOKEN = 'it''s'",
+    );
+    expect(hooks.envLine("powershell")).toBe(
+      "Remove-Item Env:CVX_ACCOUNT,Env:CONVEX_OVERRIDE_ACCESS_TOKEN -ErrorAction SilentlyContinue",
+    );
+  });
+
+  test("always a single line (it gets eval'd by the hooks)", () => {
+    for (const shell of hooks.SHELLS)
+      for (const a of [acct, undefined]) expect(hooks.envLine(shell, a)).not.toContain("\n");
+  });
+});
