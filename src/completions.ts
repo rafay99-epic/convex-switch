@@ -5,9 +5,9 @@
  */
 
 // Subcommands that take an account name as their first argument.
-const ACCOUNT_CMDS = "link rm rename run refresh use";
+const ACCOUNT_CMDS = "link rm rename run refresh use email";
 const SUBCOMMANDS =
-  "login add link unlink rm rename activate use scan run open status accounts ls which prompt refresh doctor hook completions keychain vault export import upgrade undo welcome version help";
+  "login add link unlink rm rename email activate use scan run open status accounts ls which prompt refresh doctor hook completions keychain vault export import upgrade undo reset disable enable welcome version help";
 
 const ZSH = `#compdef cvx
 _cvx() {
@@ -80,7 +80,7 @@ const PWSH = `Register-ArgumentCompleter -Native -CommandName cvx -ScriptBlock {
   }
   $sub = $tokens[1]
   $vals = @()
-  if ($sub -in 'link','rm','rename','run','refresh','use') { $vals = @(cvx accounts --names 2>$null) }
+  if ($sub -in 'link','rm','rename','run','refresh','use','email') { $vals = @(cvx accounts --names 2>$null) }
   elseif ($sub -eq 'completions') { $vals = 'zsh','bash','fish','powershell' }
   elseif ($sub -eq 'hook') { $vals = 'zsh','bash','fish','nu','powershell' }
   elseif ($sub -eq 'keychain') { $vals = 'status','enable','disable' }

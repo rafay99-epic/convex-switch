@@ -214,7 +214,10 @@ ${h("Everyday")}
 
 ${h("Manage")}
   cvx rename <old> <new>        rename an account, keep its links
+  cvx email <account> [addr]    label an account with its email (shown in lists)
   cvx rm <account>              forget an account (asks first; undo-able)
+  cvx disable · enable          pause cvx (cd stops switching) · resume
+  cvx reset                     delete ALL accounts, links & sessions (asks first)
   cvx undo [--list]             restore the vault to before the last change
   cvx refresh --all             re-authenticate every stored account
   cvx which [path]              print the account name for a dir (scripting)

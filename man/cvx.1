@@ -53,6 +53,24 @@ never overwritten).
 .B cvx rename \fIold\fR \fInew\fR
 Rename an account, keeping every link that pointed at it.
 .TP
+.B cvx email \fIaccount\fR \fR[\fIaddress\fR]
+Label an account with the email it belongs to \(em shown by \fBcvx accounts\fR
+and \fBcvx doctor\fR so same-looking accounts stay tellable apart. \fBlogin\fR
+and \fBadd\fR also ask once (optional). Bare form prints the stored address;
+\fB--clear\fR removes it. A label only: Convex's API does not expose the email
+to CLI tokens.
+.TP
+.B cvx disable\fR / \fBcvx enable
+Pause cvx \(em the cd hook stops switching accounts and the prompt segment goes
+quiet \(em and resume it. Nothing is deleted; open terminals unbind on their
+next directory change.
+.TP
+.B cvx reset \fR[\fB--force\fR]
+Delete ALL cvx state: every account, link, the active marker, keychain
+secrets, passphrase-vault metadata and its session key, and the undo history.
+NOT undoable. Asks on a terminal; scripts must pass \fB--force\fR. Alias:
+\fBcvx nuke\fR. Your \fBnpx convex login\fR is left untouched.
+.TP
 .B cvx hook \fR[\fB--install\fR] [\fB--shell\fR \fIzsh\fR|\fIbash\fR|\fIfish\fR|\fInu\fR|\fIpowershell\fR]
 Print the directory-change hook, or with \fB--install\fR wire it into the shell
 startup file (\fI~/.zshrc\fR, \fI~/.bashrc\fR, fish/nushell config, or the

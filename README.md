@@ -182,7 +182,10 @@ change).
 | `cvx unlink [path]` | Remove a link |
 | `cvx scan [dir] [--depth N] [--yes]` | Auto-discover projects under a dir and link them to accounts by team |
 | `cvx rename <old> <new>` | Rename an account, keeping its links |
+| `cvx email <account> [addr]` | Label an account with its email (shown in `accounts`/`doctor`; `login`/`add` also ask once, `--clear` removes) |
 | `cvx rm <account>` | Forget an account and its links (asks on a TTY; `--force` skips) |
+| `cvx disable` / `cvx enable` | Pause cvx — the cd hook stops switching accounts — and resume; nothing is deleted |
+| `cvx reset` | Delete ALL cvx state: accounts, links, sessions, undo history (alias `nuke`; asks on a TTY, `--force` in scripts) |
 | `cvx undo [--list]` | Restore the vault to before the last change — rm, rename, import, scan, all reversible |
 | `cvx use [account]` | Activate by name from anywhere — or this dir's account / an interactive pick |
 | `cvx run <account> -- <cmd>` | Run one command as `<account>` without changing the global login |

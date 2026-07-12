@@ -19,6 +19,10 @@ import {
   cmdUnlink,
   cmdRename,
   cmdRm,
+  cmdEmail,
+  cmdReset,
+  cmdDisable,
+  cmdEnable,
   cmdActivate,
   cmdUse,
   cmdScan,
@@ -68,6 +72,15 @@ async function main() {
     case "rm":
     case "remove":
       return cmdRm(rest);
+    case "email":
+      return cmdEmail(rest);
+    case "reset":
+    case "nuke":
+      return cmdReset(rest);
+    case "disable":
+      return cmdDisable();
+    case "enable":
+      return cmdEnable();
     case "activate":
       return cmdActivate(rest);
     case "use":

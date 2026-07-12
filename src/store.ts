@@ -66,10 +66,13 @@ export type Account = {
   teams: Team[];
   addedAt: string;
   verifiedAt?: string; // last successful token verification against Convex
+  // Human label only — Convex's profile API rejects CLI tokens
+  // ("WorkOSSessionRequired"), so the email can't be fetched; we ask the user.
+  email?: string;
 };
 export type Accounts = Record<string, Account>;
 export type Links = Record<string, string>; // absolute project path -> account name
-export type Config = { storage?: Backend; schemaVersion?: number };
+export type Config = { storage?: Backend; schemaVersion?: number; disabled?: boolean };
 
 // --- Vault I/O (dir 700, files 600) -----------------------------------------
 

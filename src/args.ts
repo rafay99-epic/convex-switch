@@ -7,7 +7,7 @@
 // The only flags that consume the next argument. Every other `--flag` is
 // boolean, so it can never swallow a following positional
 // (`cvx link --force myacct` keeps `myacct` positional).
-const VALUE_FLAGS = new Set(["token", "shell", "depth"]);
+const VALUE_FLAGS = new Set(["token", "shell", "depth", "email"]);
 
 export function parseFlags(args: string[]): { _: string[]; [k: string]: any } {
   const out: { _: string[]; [k: string]: any } = { _: [] };

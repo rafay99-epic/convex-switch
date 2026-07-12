@@ -765,3 +765,97 @@ describe("activate --env (per-session token export)", () => {
     expect(cvx(["prompt"], { env: ghost }).out).toBe("personal");
   });
 });
+
+describe("email label", () => {
+  test("set, list, print bare, clear", () => {
+    seedAccounts();
+    const r = cvx(["email", "work", "boss@corp.com"]);
+    expect(r.code).toBe(0);
+    expect(JSON.parse(readFileSync(ACCOUNTS, "utf8")).work.email).toBe("boss@corp.com");
+    // shows up wherever accounts are listed
+    expect(cvx(["accounts"]).out).toContain("boss@corp.com");
+    // bare form prints just the address (scripting-friendly)
+    expect(cvx(["email", "work"]).out.trim()).toBe("boss@corp.com");
+    expect(cvx(["email", "personal"]).out.trim()).toBe("");
+    // --clear removes it
+    expect(cvx(["email", "work", "--clear"]).code).toBe(0);
+    expect(JSON.parse(readFileSync(ACCOUNTS, "utf8")).work.email).toBeUndefined();
+  });
+  test("errors: no account / unknown account", () => {
+    expect(cvx(["email"]).code).toBe(1);
+    expect(cvx(["email", "ghost", "x@y.z"]).err).toContain("Unknown account");
+  });
+  test("doctor prints the email next to the active account", () => {
+    cvx(["email", "work", "boss@corp.com"]);
+    cvx(["link", "work", PROJ]);
+    cvx(["activate", PROJ]);
+    const r = cvx(["doctor", "--no-tokens"]);
+    expect(r.out).toContain("work · boss@corp.com");
+  });
+});
+
+describe("disable / enable", () => {
+  test("disable parks the cd hook: activate unsets, prompt goes silent", () => {
+    seedAccounts();
+    cvx(["link", "work", PROJ]);
+    cvx(["activate", PROJ]);
+    expect(cvx(["prompt"]).out).toBe("work");
+
+    expect(cvx(["disable"]).code).toBe(0);
+    expect(JSON.parse(readFileSync(CONFIG, "utf8")).disabled).toBe(true);
+    // activate touches nothing and (in --env mode) unsets the session vars
+    const before = readFileSync(CONVEX_CFG, "utf8");
+    const env = cvx(["activate", "--env", "--shell", "zsh", PROJ]);
+    expect(env.code).toBe(0);
+    expect(env.out).toContain("unset");
+    expect(env.out).not.toContain("tok-work-AAA");
+    expect(readFileSync(CONVEX_CFG, "utf8")).toBe(before);
+    expect(cvx(["prompt"]).out).toBe("");
+    // status says so, in both forms
+    expect(JSON.parse(cvx(["status", "--json"], { cwd: PROJ }).out).disabled).toBe(true);
+    expect(cvx(["status"], { cwd: PROJ }).out).toContain("disabled");
+    expect(cvx(["doctor", "--no-tokens"]).out).toContain("paused");
+  });
+  test("enable resumes switching", () => {
+    expect(cvx(["enable"]).code).toBe(0);
+    expect(JSON.parse(readFileSync(CONFIG, "utf8")).disabled).toBeUndefined();
+    expect(cvx(["activate", PROJ]).code).toBe(0);
+    expect(cvx(["prompt"]).out).toBe("work");
+    expect(cvx(["enable"]).out).toContain("already enabled");
+  });
+});
+
+describe("reset (nuke everything)", () => {
+  test("piped without --force refuses", () => {
+    seedAccounts();
+    const r = cvx(["reset"]);
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("--force");
+    expect(Object.keys(JSON.parse(readFileSync(ACCOUNTS, "utf8"))).length).toBe(2);
+  });
+  test("--force wipes accounts, links, marker, config, and the undo history", () => {
+    cvx(["link", "work", PROJ]);
+    cvx(["activate", PROJ]);
+    const r = cvx(["reset", "--force"]);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("2 account(s)");
+    expect(JSON.parse(readFileSync(ACCOUNTS, "utf8"))).toEqual({});
+    expect(JSON.parse(readFileSync(LINKS, "utf8"))).toEqual({});
+    expect(existsSync(ACTIVE) ? readFileSync(ACTIVE, "utf8").trim() : "").toBe("");
+    expect(JSON.parse(readFileSync(CONFIG, "utf8"))).toEqual({ schemaVersion: 2 });
+    expect(existsSync(join(HOME, ".convex-switch", "backups"))).toBe(false);
+    // reset is a fresh start, not an undoable edit
+    const undo = cvx(["undo"]);
+    expect(undo.code).toBe(1);
+    expect(undo.err).toContain("Nothing to undo");
+    // the user's own convex login is untouched
+    expect(JSON.parse(readFileSync(CONVEX_CFG, "utf8")).accessToken).toBe("tok-work-AAA");
+  });
+  test("nuke is an alias and works on a corrupt vault", () => {
+    seedAccounts();
+    writeFileSync(ACCOUNTS, "{ not json");
+    const r = cvx(["nuke", "--force"]);
+    expect(r.code).toBe(0);
+    expect(JSON.parse(readFileSync(ACCOUNTS, "utf8"))).toEqual({});
+  });
+});

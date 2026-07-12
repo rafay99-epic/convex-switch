@@ -13,6 +13,7 @@ import {
   HOME,
   VAULT,
   VERSION,
+  SCHEMA,
   type Team,
   type Account,
   type Accounts,
@@ -189,6 +190,12 @@ export async function cmdAdd(args: string[]) {
   if (accounts[name] && !flags.force)
     die(`Account ${bold(name)} already exists. Use ${bold("--force")} to overwrite.`);
 
+  // Which email is this? Convex's API won't tell us (the profile endpoint
+  // rejects CLI tokens), so ask once — optional, purely a label for humans.
+  let email = typeof flags.email === "string" ? flags.email.trim() : (accounts[name]?.email ?? "");
+  if (!email && process.stdin.isTTY)
+    email = await ask(dim(`Email of this account (optional, helps tell accounts apart): `));
+
   const backend = storageBackend();
   let rec;
   try {
@@ -198,6 +205,7 @@ export async function cmdAdd(args: string[]) {
   }
   const now = new Date().toISOString();
   accounts[name] = { ...rec, teams, addedAt: accounts[name]?.addedAt ?? now, verifiedAt: now };
+  if (email) accounts[name].email = email;
   writeAccounts(accounts);
   if (token === currentConvexToken()) writeActive(name, token);
 
@@ -369,6 +377,95 @@ export async function cmdRm(args: string[]) {
   );
 }
 
+// --- email / reset / enable / disable ----------------------------------------
+
+/**
+ * email — label an account with the email it belongs to. A label only: Convex's
+ * profile API rejects CLI tokens (WorkOSSessionRequired), so it can't be fetched.
+ * Bare `cvx email <account>` prints the stored address (scripting-friendly).
+ */
+export function cmdEmail(args: string[]) {
+  const flags = parseFlags(args);
+  const name = flags._[0];
+  if (!name) die(`Usage: ${bold("cvx email <account> [address]")}   (--clear removes it)`);
+  const accounts = readAccounts();
+  const acc = requireAccount(accounts, name);
+  if (flags.clear) {
+    delete acc.email;
+    writeAccounts(accounts);
+    return console.log(`${green("✓")} Cleared the email on ${accountColor(name)}.${vexTag("blink", name)}`);
+  }
+  const addr = flags._[1] ?? (typeof flags.email === "string" ? flags.email : undefined);
+  if (!addr) return console.log(acc.email ?? "");
+  acc.email = addr;
+  writeAccounts(accounts);
+  console.log(`${green("✓")} ${accountColor(name)} → ${addr}${vexTag("happy", name)}`);
+}
+
+/**
+ * reset — nuke ALL cvx state: every account, link, the active marker, the
+ * passphrase-vault metadata + its cached session key, keychain secrets, and
+ * the undo history (backups hold old tokens, so a reset must not keep them).
+ * The user's `npx convex login` (~/.convex/config.json) is left untouched.
+ */
+export async function cmdReset(args: string[]) {
+  const flags = parseFlags(args);
+  // A corrupt vault must not block the one command that wipes it clean.
+  let accounts: Accounts = {};
+  try {
+    accounts = readAccounts();
+  } catch {}
+  let nLinks = 0;
+  try {
+    nLinks = Object.keys(readLinks()).length;
+  } catch {}
+  const nAcc = Object.keys(accounts).length;
+
+  if (!flags.force && !flags.yes) {
+    if (!process.stdin.isTTY)
+      die(`cvx reset deletes ALL accounts and links (NOT undoable). Pass ${bold("--force")} to confirm.`);
+    const yn = await ask(
+      `${red("This deletes ALL cvx state")} — ${bold(String(nAcc))} account(s), ${bold(String(nLinks))} link(s), every session, and the undo history (${bold("not")} undoable). Continue? [y/N] `,
+    );
+    if (!/^y(es)?$/i.test(yn)) return console.log(dim("Cancelled — nothing deleted."));
+  }
+
+  // Vault first, keychain secrets after (same order as `rm`): a failed secret
+  // delete leaves an orphan secret, never a record pointing at a deleted one.
+  writeAccounts({});
+  writeLinks({});
+  writeConfig({ schemaVersion: SCHEMA }); // storage backend back to the default
+  clearActive();
+  for (const [name, acc] of Object.entries(accounts)) warnIfSecretLeft(name, deleteToken(name, acc));
+  destroyVaultMeta(); // passphrase salt + the cached vault-session key
+  purgeBackups();
+  console.log(
+    `${green("✓")} Reset — removed ${nAcc} account(s) and ${nLinks} link(s).${vexTag("sad")}`,
+  );
+  console.log(
+    dim("  Open terminals unbind on their next cd. Your `npx convex login` is untouched."),
+  );
+}
+
+/** disable — park cvx: the cd hook stops switching accounts until `cvx enable`. */
+export function cmdDisable() {
+  const c = readConfig();
+  if (c.disabled) return console.log(dim("cvx is already disabled."));
+  writeConfig({ ...c, disabled: true });
+  console.log(
+    `${yellow("⏸")} cvx disabled — the cd hook won't switch accounts. Resume: ${bold("cvx enable")}${vexTag("sleepy")}`,
+  );
+  console.log(dim("  Open terminals unbind on their next cd; nothing is deleted."));
+}
+
+export function cmdEnable() {
+  const c = readConfig();
+  if (!c.disabled) return console.log(dim("cvx is already enabled."));
+  delete c.disabled;
+  writeConfig(c);
+  console.log(`${green("▶")} cvx enabled — accounts switch on cd again.${vexTag("happy")}`);
+}
+
 // --- activate (the hot path) + interactive use ------------------------------
 
 /**
@@ -399,6 +496,12 @@ export function cmdActivate(args: string[]) {
     console.log(envLine(shell, acct));
   };
   try {
+    // Parked (`cvx disable`): touch nothing, and unset this session's vars so
+    // a disabled cvx can't keep a token pinned in the shell.
+    if (readConfig().disabled) {
+      if (!quiet) say(dim("cvx is disabled — run `cvx enable` to resume switching."));
+      return emit();
+    }
     const link = resolveLink(flags._[0] ?? process.cwd());
     if (!link) {
       if (!quiet) say(dim("No account linked to this directory."));
@@ -552,6 +655,7 @@ async function pickNumbered(names: string[]): Promise<string | null> {
 
 export function cmdStatus(args: string[] = []) {
   const flags = parseFlags(args);
+  const disabled = !!readConfig().disabled;
   const accounts = readAccounts();
   const global = activeAccountName(accounts);
   // A hooked shell exports the account per session (activate --env) — that's
@@ -573,6 +677,7 @@ export function cmdStatus(args: string[] = []) {
           linkPath: link?.path ?? null,
           dir: canon(process.cwd()),
           loggedIn,
+          disabled,
         },
         null,
         2,
@@ -591,6 +696,8 @@ export function cmdStatus(args: string[] = []) {
         ? "alarm"
         : "happy";
   const face = process.stdout.isTTY ? `   ${vex(mood, active)}` : "";
+  if (disabled)
+    console.log(yellow("cvx is disabled") + dim(" — the cd hook won't switch accounts (cvx enable resumes).") + "\n");
   console.log(bold("Active convex account:") + face);
   if (active) {
     const via =
@@ -631,8 +738,9 @@ export function cmdAccounts(args: string[] = []) {
     const dot = name === active ? green("●") : dim("○");
     const store = acc.keychain ? dim("· keychain") : acc.enc || acc.pw ? dim("· encrypted") : "";
     const age = ago(acc.verifiedAt);
+    const email = acc.email ? dim(` · ${acc.email}`) : "";
     console.log(
-      `  ${dot} ${accountColor(name, name.padEnd(14))} ${teamLabel(acc)} ${store}${age ? dim(` · verified ${age}`) : ""}`,
+      `  ${dot} ${accountColor(name, name.padEnd(14))} ${teamLabel(acc)}${email} ${store}${age ? dim(` · verified ${age}`) : ""}`,
     );
   }
 }
@@ -676,6 +784,7 @@ style = "bold cyan"
     return;
   }
   try {
+    if (readConfig().disabled) return; // parked — show nothing in the prompt
     const accounts = readAccounts();
     // The session's own export (activate --env) is what convex actually uses
     // in this terminal — show it over the shared global marker.
@@ -1178,7 +1287,13 @@ export async function cmdDoctor(args: string[] = []) {
   console.log(`  ${green("✓")} token storage     ${dim(backendLabel(backend))}${lockNote}`);
 
   const active = vaultOk ? activeAccountName(accounts) : null;
-  console.log(`  ${warn(!!active)} active account    ${active ? dim(active) : dim("none active")}`);
+  const activeEmail = active && accounts[active]?.email ? ` · ${accounts[active].email}` : "";
+  console.log(
+    `  ${warn(!!active)} active account    ${active ? dim(active + activeEmail) : dim("none active")}`,
+  );
+
+  if (readConfig().disabled)
+    console.log(`  ${yellow("!")} disabled          ${yellow("cvx is paused — run `cvx enable` to resume switching")}`);
 
   // Hook presence AND freshness: an rc still carrying an older snippet keeps
   // the old cd-only behavior even after the binary upgrades — flag it.
@@ -1225,9 +1340,10 @@ export async function cmdDoctor(args: string[] = []) {
     console.log(bold("\nToken health:"));
     let verifiedAny = false;
     for (const [name, acc] of Object.entries(accounts)) {
+      const email = acc.email ? dim(` · ${acc.email}`) : "";
       const t = tokenOf(name, acc);
       if (t == null) {
-        console.log(`  ${red("✗")} ${bold(name.padEnd(14))} ${red("token unreadable")}`);
+        console.log(`  ${red("✗")} ${bold(name.padEnd(14))} ${red("token unreadable")}${email}`);
         healthy = false;
         continue;
       }
@@ -1236,7 +1352,7 @@ export async function cmdDoctor(args: string[] = []) {
         await verifyToken(t);
         const age = ago(acc.verifiedAt);
         sp.stop(
-          `  ${green("✓")} ${accountColor(name, name.padEnd(14))} ${dim("valid")}${age ? dim(` · last verified ${age}`) : ""}`,
+          `  ${green("✓")} ${accountColor(name, name.padEnd(14))} ${dim("valid")}${email}${age ? dim(` · last verified ${age}`) : ""}`,
         );
         acc.verifiedAt = new Date().toISOString();
         verifiedAny = true;
@@ -1244,7 +1360,7 @@ export async function cmdDoctor(args: string[] = []) {
         const msg = String((e as Error).message);
         const offline = /reach Convex|timed out/.test(msg);
         sp.stop(
-          `  ${offline ? yellow("!") : red("✗")} ${bold(name.padEnd(14))} ${offline ? dim("couldn't check (offline)") : red(msg)}`,
+          `  ${offline ? yellow("!") : red("✗")} ${bold(name.padEnd(14))} ${offline ? dim("couldn't check (offline)") : red(msg)}${email}`,
         );
         if (!offline) {
           // With --fix we offer to re-auth below, so defer the verdict; without
