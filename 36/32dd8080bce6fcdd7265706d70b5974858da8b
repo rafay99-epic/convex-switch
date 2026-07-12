@@ -1,0 +1,55 @@
+tests/cli.test.ts
+  s_f2b80772483794::t_02a2f53f218862 848-850
+  s_f2b80772483794::t_54ce765b42b2e8 844
+  s_f2b80772483794::t_719c7339380880 768-787,789,794-816,818-843,845-847,851-861
+  s_f2b80772483794::t_d855b96b9c5b0c 788,790-793
+  s_f2b80772483794::t_553ea22ffc7718 817
+src/store.ts
+  s_f2b80772483794::t_117ed03e1d4a1e 69-71,75
+src/commands.ts
+  s_f2b80772483794::t_86dc623e568059 699-700
+  s_f2b80772483794::t_1c41ac778b2af0 1363
+  s_f2b80772483794::t_5f4f8724f4c55e 193-198
+  s_f2b80772483794::t_8bef129623a0b1 658
+  s_f2b80772483794::t_fa24b2ef7a0bb1 680
+  s_f2b80772483794::t_0b630016d2b4f2 741,743
+  s_f2b80772483794::t_85598b86f1408d 208
+  s_f2b80772483794::t_9ab7ffd1cdbb17 380-468
+  s_f2b80772483794::t_cf42424761c13b 787
+  s_f2b80772483794::t_ac8cba14b1a400 1290-1296
+  s_f2b80772483794::t_436717f8184a44 1343,1346,1355
+  s_f2b80772483794::t_f4b8b6b5c44904 499-504
+  s_f2b80772483794::t_384db2e9cdbfa4 16
+src/ui.ts
+  s_f2b80772483794::t_218e473cf7db0b 217,219-220
+bin/cvx.ts
+  s_f2b80772483794::t_0c858f9f04510b 22-25
+  s_f2b80772483794::t_4b51922d18a301 75-83
+src/migrate.ts
+  s_f2b80772483794::t_c7df0bf831f749 45-46,48-49
+src/args.ts
+  s_f2b80772483794::t_8a4126ff40114d 10
+man/cvx.1
+  s_f2b80772483794::t_93c7d96504b932 56-73
+src/completions.ts
+  s_f2b80772483794::t_1ab3af7c66e7ea 8,10
+  s_f2b80772483794::t_1e2840558142d5 83
+README.md
+  s_f2b80772483794::t_30bd17be1454a5 185,187-188
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "3632dd8080bce6fcdd7265706d70b5974858da8b",
+  "prompts": {},
+  "sessions": {
+    "s_f2b80772483794": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7d5b6088-1b36-4faf-8b41-11b9bf88d34f",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Abdul Rafay <99marafay@gmail.com>"
+    }
+  }
+}
